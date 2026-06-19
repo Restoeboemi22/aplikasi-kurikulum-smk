@@ -15,6 +15,7 @@ export const TEACHER_ALLOWED_MENU_IDS: string[] = [
 // Key = id halaman, value = daftar id tab yang boleh.
 export const TEACHER_ALLOWED_TABS: Record<string, string[]> = {
   "kurikulum-perangkat-pembelajaran": ["submit"],
+  "kurikulum-perangkat-penilaian": ["submit"],
   "jurnal-mengajar": ["format"],
 };
 

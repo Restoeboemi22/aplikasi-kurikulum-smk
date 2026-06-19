@@ -162,6 +162,18 @@ export default function Home() {
 
   const role = user?.role ?? "TEACHER";
 
+  // Peta id -> label untuk judul header yang rapi (alih-alih id mentah).
+  const labelById: Record<string, string> = {};
+  allNavItems.forEach((item) => {
+    labelById[item.id] = item.label;
+    if (isGroup(item)) {
+      item.children.forEach((c) => {
+        labelById[c.id] = c.label;
+      });
+    }
+  });
+  const activeLabel = labelById[activeTab] ?? "Dashboard";
+
   // Filter menu sesuai role. Untuk grup, tampilkan hanya anak yang boleh,
   // dan sembunyikan grup bila tak ada anak yang tersisa.
   const navItems = allNavItems
@@ -308,7 +320,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-fuchsia-50">
       {/* Sidebar */}
       <aside
         className={`${
@@ -360,29 +372,30 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold text-gray-800">
-              {activeTab}
+        <header className="bg-gradient-to-r from-pink-100 via-rose-100 to-fuchsia-100 border-b border-pink-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl" aria-hidden>🎀</span>
+            <h2 className="text-2xl font-bold text-pink-700">
+              {activeLabel}
             </h2>
           </div>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400" size={18} />
               <input
                 type="text"
                 placeholder="Cari..."
-                className="pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="pl-10 pr-4 py-2 rounded-full border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400"
               />
             </div>
-            <button className="p-2 rounded-lg hover:bg-gray-100">
-              <Bell size={20} className="text-gray-600" />
+            <button className="p-2 rounded-full hover:bg-pink-200/60 text-pink-500">
+              <Bell size={20} />
             </button>
           </div>
         </header>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">{renderGuardedContent()}</div>
+        <div className="kitty-bg flex-1 overflow-auto p-6">{renderGuardedContent()}</div>
       </main>
     </div>
   );

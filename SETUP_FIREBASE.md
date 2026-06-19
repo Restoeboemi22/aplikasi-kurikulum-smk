@@ -88,6 +88,20 @@ service cloud.firestore {
       // Hanya admin yang boleh membuat/mengubah/menghapus akun & role.
       allow write: if isAdmin();
     }
+
+    // Data/profil guru (bukan akun login).
+    match /teachers_data/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Jurnal mengajar. Guru (login) boleh membaca & menambah jurnal;
+    // hanya admin yang boleh menghapus.
+    match /teaching_journals/{docId} {
+      allow read, create: if isSignedIn();
+      allow delete: if isAdmin();
+      allow update: if isAdmin();
+    }
   }
 }
 ```

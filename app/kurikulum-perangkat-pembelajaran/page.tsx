@@ -2,21 +2,20 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Eye, Calendar, FileText, BookOpen, Book, FileCheck, CheckCircle2, Clock, Filter, Upload, Check, X, Activity } from "lucide-react";
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { useAuth } from "@/lib/auth-context";
 import { canAccessTab, defaultTabFor } from "@/lib/permissions";
+import { getDbSafe, isFirebaseConfigured } from "@/lib/firebase";
 
 const PAGE_ID = "kurikulum-perangkat-pembelajaran";
+
+// Koleksi data guru (Database > Data Guru) — sumber daftar Nama Guru.
+const TEACHERS_COLLECTION = "teachers_data";
 
 const DEFAULT_CLASSES = [
   { id: 1, className: "X TKJ 1", majorCode: "TKJ", grade: "X" },
   { id: 2, className: "X TKJ 2", majorCode: "TKJ", grade: "X" },
   { id: 3, className: "X TKR 1", majorCode: "TKR", grade: "X" },
-];
-
-const DEFAULT_TEACHERS = [
-  { id: 1, name: "Pak Budi Santoso" },
-  { id: 2, name: "Bu Siti Aminah" },
-  { id: 3, name: "Pak Anton Wijaya" },
 ];
 
 const DEFAULT_SUBJECTS = [
@@ -101,13 +100,8 @@ export default function LearningToolsPage() {
     return DEFAULT_CLASSES;
   });
 
-  const [teachers, setTeachers] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-teachers');
-      return saved ? JSON.parse(saved) : DEFAULT_TEACHERS;
-    }
-    return DEFAULT_TEACHERS;
-  });
+  // Daftar guru diambil realtime dari Database > Data Guru (Firestore).
+  const [teachers, setTeachers] = useState<any[]>([]);
 
   const [submissions, setSubmissions] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -134,10 +128,7 @@ export default function LearningToolsPage() {
       
       const savedClasses = localStorage.getItem('kurikulum-smk-classes');
       if (savedClasses) setClasses(JSON.parse(savedClasses));
-      
-      const savedTeachers = localStorage.getItem('kurikulum-smk-teachers');
-      if (savedTeachers) setTeachers(JSON.parse(savedTeachers));
-      
+
       const savedSubmissions = localStorage.getItem('kurikulum-smk-learning-submissions');
       if (savedSubmissions) setSubmissions(JSON.parse(savedSubmissions));
       
@@ -148,6 +139,41 @@ export default function LearningToolsPage() {
     syncData();
     return () => window.removeEventListener('storage', syncData);
   }, []);
+
+  // Realtime sync daftar guru dari Database > Data Guru (Firestore).
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const q = query(collection(getDbSafe(), TEACHERS_COLLECTION), orderBy("name"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setTeachers(
+          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
+        );
+      },
+      () => {
+        /* abaikan — dropdown guru sekadar kosong bila gagal memuat */
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  // Guru: isi otomatis Nama Guru dengan namanya sendiri di form.
+  useEffect(() => {
+    if (role === "TEACHER" && user?.name) {
+      setFormData((prev) =>
+        prev.teacherName === user.name ? prev : { ...prev, teacherName: user.name }
+      );
+    }
+  }, [role, user?.name]);
+
+  // Pilihan Nama Guru di form:
+  // - ADMIN: semua guru terdaftar.
+  // - GURU: hanya dirinya sendiri (sesuai data di database admin).
+  const formTeacherOptions =
+    role === "ADMIN"
+      ? teachers
+      : teachers.filter((t: any) => t.name === user?.name);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
@@ -507,7 +533,7 @@ export default function LearningToolsPage() {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">Pilih Guru</option>
-                    {isClient && teachers.map((teacher: any) => (
+                    {isClient && formTeacherOptions.map((teacher: any) => (
                       <option key={teacher.id} value={teacher.name}>{teacher.name}</option>
                     ))}
                   </select>
