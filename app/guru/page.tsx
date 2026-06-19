@@ -1,40 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Eye, X } from "lucide-react";
-
-const DEFAULT_TEACHERS = [
-  {
-    id: 1,
-    kodeGuru: "GRU001",
-    tanggalLahir: "1985-01-01",
-    name: "Pak Budi Santoso",
-    mataPelajaran: "Informatika",
-    tingkatKelas: ["X"],
-    jurusan: ["TKJ"],
-    jenisKelamin: "Laki-laki",
-  },
-  {
-    id: 2,
-    kodeGuru: "GRU002",
-    tanggalLahir: "1988-05-15",
-    name: "Bu Siti Aminah",
-    mataPelajaran: "Matematika",
-    tingkatKelas: ["X", "XI"],
-    jurusan: ["TKJ", "TKR"],
-    jenisKelamin: "Perempuan",
-  },
-  {
-    id: 3,
-    kodeGuru: "GRU003",
-    tanggalLahir: "1982-03-20",
-    name: "Pak Anton Wijaya",
-    mataPelajaran: "Dasar-Dasar Program Keahlian",
-    tingkatKelas: ["X"],
-    jurusan: ["TKR"],
-    jenisKelamin: "Laki-laki",
-  },
-];
+import { Plus, Edit, Trash2, Eye, X, Loader2, AlertCircle } from "lucide-react";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
+} from "firebase/firestore";
+import { getDbSafe, isFirebaseConfigured } from "@/lib/firebase";
 
 const DEFAULT_SUBJECTS = [
   { id: 1, name: "Pendidikan Agama dan Budi Pekerti", code: "PABP" },
@@ -54,47 +32,75 @@ const DEFAULT_SUBJECTS = [
   { id: 15, name: "Praktik Kerja Lapangan", code: "PKL" },
 ];
 
+// Koleksi Firestore untuk data guru (terpisah dari koleksi "users" yang
+// menyimpan akun login). Doc id digenerate otomatis oleh Firestore (string).
+const TEACHERS_COLLECTION = "teachers_data";
+
+interface Teacher {
+  id: string;
+  kodeGuru: string;
+  tanggalLahir: string;
+  name: string;
+  mataPelajaran: string;
+  tingkatKelas: string[];
+  jurusan: string[];
+  jenisKelamin: string;
+}
+
 export default function TeachersPage() {
-  const [teachers, setTeachers] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-teachers');
-      return saved ? JSON.parse(saved) : DEFAULT_TEACHERS;
-    }
-    return DEFAULT_TEACHERS;
-  });
-
-  const [subjects, setSubjects] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-subjects');
-      return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
-    }
-    return DEFAULT_SUBJECTS;
-  });
-
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isClient, setIsClient] = useState(false);
 
+  // Subjects masih dari localStorage (modul Mata Pelajaran belum dimigrasikan).
+  const [subjects, setSubjects] = useState<any[]>(DEFAULT_SUBJECTS);
+
+  // Realtime sync data guru dari Firestore.
   useEffect(() => {
     setIsClient(true);
-    const syncData = () => {
-      const savedTeachers = localStorage.getItem('kurikulum-smk-teachers');
-      if (savedTeachers) setTeachers(JSON.parse(savedTeachers));
-      const savedSubjects = localStorage.getItem('kurikulum-smk-subjects');
-      if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
-    };
-    window.addEventListener('storage', syncData);
-    syncData();
-    return () => window.removeEventListener('storage', syncData);
-  }, []);
 
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-teachers', JSON.stringify(teachers));
+    // Muat subjects dari localStorage (untuk dropdown).
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("kurikulum-smk-subjects");
+      if (saved) {
+        try {
+          setSubjects(JSON.parse(saved));
+        } catch {
+          /* abaikan */
+        }
+      }
     }
-  }, [teachers, isClient]);
+
+    if (!isFirebaseConfigured) {
+      setError("Firebase belum dikonfigurasi.");
+      setLoading(false);
+      return;
+    }
+
+    const q = query(collection(getDbSafe(), TEACHERS_COLLECTION), orderBy("kodeGuru"));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows: Teacher[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Teacher, "id">),
+        }));
+        setTeachers(rows);
+        setLoading(false);
+      },
+      () => {
+        setError("Gagal memuat data guru. Periksa koneksi atau izin akses.");
+        setLoading(false);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     kodeGuru: "",
     tanggalLahir: "",
@@ -107,29 +113,50 @@ export default function TeachersPage() {
 
   const subjectsList = isClient ? subjects.map((s: any) => s.name) : [];
 
-  const handleAddTeacher = () => {
-    const newTeacher = {
-      id: isEditing && editingId ? editingId : teachers.length + 1,
-      ...formData,
-    };
-    if (isEditing) {
-      setTeachers(teachers.map((t: any) => t.id === editingId ? newTeacher : t));
-    } else {
-      setTeachers([...teachers, newTeacher]);
+  const handleAddTeacher = async () => {
+    if (!formData.name.trim() || !formData.kodeGuru.trim()) {
+      setError("Kode Guru dan Nama wajib diisi.");
+      return;
     }
-    resetForm();
+    setSaving(true);
+    setError("");
+    try {
+      const db = getDbSafe();
+      if (isEditing && editingId) {
+        await updateDoc(doc(db, TEACHERS_COLLECTION, editingId), { ...formData });
+      } else {
+        await addDoc(collection(db, TEACHERS_COLLECTION), { ...formData });
+      }
+      resetForm();
+      // Tidak perlu setTeachers manual — onSnapshot otomatis memperbarui.
+    } catch {
+      setError("Gagal menyimpan data. Pastikan Anda admin & koneksi stabil.");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleEditTeacher = (teacher: any) => {
+  const handleEditTeacher = (teacher: Teacher) => {
     setEditingId(teacher.id);
-    setFormData(teacher);
+    setFormData({
+      kodeGuru: teacher.kodeGuru ?? "",
+      tanggalLahir: teacher.tanggalLahir ?? "",
+      name: teacher.name ?? "",
+      mataPelajaran: teacher.mataPelajaran ?? "",
+      tingkatKelas: teacher.tingkatKelas ?? [],
+      jurusan: teacher.jurusan ?? [],
+      jenisKelamin: teacher.jenisKelamin ?? "Laki-laki",
+    });
     setIsEditing(true);
     setIsDialogOpen(true);
   };
 
-  const handleDeleteTeacher = (id: number) => {
-    if (confirm("Apakah Anda yakin ingin menghapus guru ini?")) {
-      setTeachers(teachers.filter((t: any) => t.id !== id));
+  const handleDeleteTeacher = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus guru ini?")) return;
+    try {
+      await deleteDoc(doc(getDbSafe(), TEACHERS_COLLECTION, id));
+    } catch {
+      setError("Gagal menghapus data.");
     }
   };
 
@@ -149,10 +176,8 @@ export default function TeachersPage() {
   };
 
   const formatKeterangan = (tingkat: string[], jurusan: string[]) => {
-    if (tingkat.length === 0 || jurusan.length === 0) return "-";
-    const tingkatStr = tingkat.join(", ");
-    const jurusanStr = jurusan.join(", ");
-    return `${tingkatStr} - ${jurusanStr}`;
+    if (!tingkat?.length || !jurusan?.length) return "-";
+    return `${tingkat.join(", ")} - ${jurusan.join(", ")}`;
   };
 
   return (
@@ -160,7 +185,7 @@ export default function TeachersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Data Guru</h3>
-          <p className="text-sm text-gray-500">Kelola data guru SMK</p>
+          <p className="text-sm text-gray-500">Kelola data guru SMK — tersimpan online (realtime)</p>
         </div>
         <button
           onClick={() => setIsDialogOpen(true)}
@@ -170,6 +195,12 @@ export default function TeachersPage() {
           Tambah Guru
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          <AlertCircle size={18} /> <span>{error}</span>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <table className="w-full">
@@ -184,41 +215,55 @@ export default function TeachersPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {teachers.map((teacher: any) => (
-              <tr key={teacher.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-gray-700 font-mono">{teacher.kodeGuru}</td>
-                <td className="px-6 py-4 text-gray-700">{teacher.tanggalLahir}</td>
-                <td className="px-6 py-4">
-                  <span className="font-medium text-gray-800">{teacher.name}</span>
-                </td>
-                <td className="px-6 py-4 text-gray-700">{teacher.mataPelajaran}</td>
-                <td className="px-6 py-4 text-gray-700">{formatKeterangan(teacher.tingkatKelas, teacher.jurusan)}</td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button 
-                      className="p-2 hover:bg-gray-100 rounded-lg" 
-                      title="Lihat Detail"
-                    >
-                      <Eye size={16} className="text-gray-600" />
-                    </button>
-                    <button 
-                      className="p-2 hover:bg-blue-100 rounded-lg" 
-                      title="Edit"
-                      onClick={() => handleEditTeacher(teacher)}
-                    >
-                      <Edit size={16} className="text-blue-600" />
-                    </button>
-                    <button 
-                      className="p-2 hover:bg-red-100 rounded-lg" 
-                      title="Hapus"
-                      onClick={() => handleDeleteTeacher(teacher.id)}
-                    >
-                      <Trash2 size={16} className="text-red-600" />
-                    </button>
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                  <Loader2 size={20} className="animate-spin inline mr-2" /> Memuat data...
                 </td>
               </tr>
-            ))}
+            ) : teachers.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-10 text-center text-gray-400">
+                  Belum ada data guru. Klik "Tambah Guru" untuk menambahkan.
+                </td>
+              </tr>
+            ) : (
+              teachers.map((teacher: Teacher) => (
+                <tr key={teacher.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-gray-700 font-mono">{teacher.kodeGuru}</td>
+                  <td className="px-6 py-4 text-gray-700">{teacher.tanggalLahir}</td>
+                  <td className="px-6 py-4">
+                    <span className="font-medium text-gray-800">{teacher.name}</span>
+                  </td>
+                  <td className="px-6 py-4 text-gray-700">{teacher.mataPelajaran}</td>
+                  <td className="px-6 py-4 text-gray-700">{formatKeterangan(teacher.tingkatKelas, teacher.jurusan)}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        className="p-2 hover:bg-gray-100 rounded-lg"
+                        title="Lihat Detail"
+                      >
+                        <Eye size={16} className="text-gray-600" />
+                      </button>
+                      <button
+                        className="p-2 hover:bg-blue-100 rounded-lg"
+                        title="Edit"
+                        onClick={() => handleEditTeacher(teacher)}
+                      >
+                        <Edit size={16} className="text-blue-600" />
+                      </button>
+                      <button
+                        className="p-2 hover:bg-red-100 rounded-lg"
+                        title="Hapus"
+                        onClick={() => handleDeleteTeacher(teacher.id)}
+                      >
+                        <Trash2 size={16} className="text-red-600" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -312,7 +357,7 @@ export default function TeachersPage() {
                           checked={formData.tingkatKelas.includes(tingkat)}
                           onChange={() => {
                             const newTingkat = formData.tingkatKelas.includes(tingkat)
-                              ? formData.tingkatKelas.filter(t => t !== tingkat)
+                              ? formData.tingkatKelas.filter((t) => t !== tingkat)
                               : [...formData.tingkatKelas, tingkat];
                             setFormData({ ...formData, tingkatKelas: newTingkat });
                           }}
@@ -333,7 +378,7 @@ export default function TeachersPage() {
                           checked={formData.jurusan.includes(jrs)}
                           onChange={() => {
                             const newJurusan = formData.jurusan.includes(jrs)
-                              ? formData.jurusan.filter(j => j !== jrs)
+                              ? formData.jurusan.filter((j) => j !== jrs)
                               : [...formData.jurusan, jrs];
                             setFormData({ ...formData, jurusan: newJurusan });
                           }}
@@ -356,8 +401,10 @@ export default function TeachersPage() {
               </button>
               <button
                 onClick={handleAddTeacher}
-                className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-60"
               >
+                {saving && <Loader2 size={16} className="animate-spin" />}
                 {isEditing ? "Update" : "Simpan"}
               </button>
             </div>

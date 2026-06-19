@@ -35,3 +35,5 @@ next-env.d.ts
 
 # local editor / assistant settings
 .claude/
+
+.vercel
