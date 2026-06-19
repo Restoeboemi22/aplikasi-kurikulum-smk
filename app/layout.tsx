@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import ServiceWorkerCleanup from "./sw-cleanup";
 
 export const metadata: Metadata = {
   title: "Aplikasi Kurikulum SMK",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className="min-h-screen bg-gray-50">
+        <ServiceWorkerCleanup />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

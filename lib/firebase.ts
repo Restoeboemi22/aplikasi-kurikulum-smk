@@ -47,7 +47,7 @@ export function getDbSafe(): Firestore {
 
 // Domain sintetis untuk memetakan NIP -> email internal Firebase.
 // Guru hanya mengetik NIP; email ini tidak pernah mereka lihat.
-export const NIP_EMAIL_DOMAIN = "kurikulum-smk.local";
+export const NIP_EMAIL_DOMAIN = "kurikulum-smks-pacet.local";
 
 export function nipToEmail(nip: string): string {
   return `${nip.trim().toLowerCase()}@${NIP_EMAIL_DOMAIN}`;
