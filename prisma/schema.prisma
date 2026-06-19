@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  PRINCIPAL
+  STUDENT
+}
+
+enum Status {
+  AKTIF
+  ARSIP
+  BELUM
+  SUDAH
+}
+
+enum JenisKalender {
+  HARI_EFEKTIF
+  LIBUR_NASIONAL
+  LIBUR_SEKOLAH
+  KEGIATAN
+  UJIAN
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  role         UserRole  @default(TEACHER)
+  nip          String?
+  photoUrl     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  // Relations
+  teacher      Teacher?
+  journals     Journal[]
+  grades       Grade[]
+}
+
+model Teacher {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjects      String    // Comma-separated string
+  classes       String    // Comma-separated string
+  teachingLoad  Int?
+  deviceStatus  Status    @default(BELUM)
+  
+  // Relations
+  schedules     Schedule[]
+  journals      Journal[]
+  grades        Grade[]
+}
+
+model Curriculum {
+  id                  String   @id @default(cuid())
+  competency          String
+  subject             String
+  gradeLevel          String
+  semester            String
+  cp                  String   // Capaian Pembelajaran
+  tp                  String   // Tujuan Pembelajaran
+  atp                 String   // Alur Tujuan Pembelajaran
+  timeAllocation      Int
+  academicYear        String
+  status              Status   @default(AKTIF)
+  documentUrl         String?
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  // Relations
+  journals            Journal[]
+}
+
+model Schedule {
+  id          String   @id @default(cuid())
+  day         String
+  period      Int
+  startTime   String
+  endTime     String
+  classLevel  String
+  subject     String
+  teacherId   String
+  room        String
+  academicYear String
+  semester    String
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+}
+
+model Journal {
+  id              String   @id @default(cuid())
+  date            DateTime
+  teacherId       String
+  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classLevel      String
+  subject         String
+  material        String
+  tpAchieved      String?
+  curriculumId    String?
+  curriculum      Curriculum? @relation(fields: [curriculumId], references: [id])
+  method          String
+  presentCount    Int
+  issues          String?
+  notes           String?
+  verifyStatus    Status   @default(BELUM)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  name        String
+  studentId   String
+  classLevel  String
+  email       String?
+  
+  // Relations
+  grades      Grade[]
+}
+
+model Grade {
+  id              String   @id @default(cuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject         String
+  semester        String
+  dailyGrade      Float
+  midtermGrade    Float
+  finalGrade      Float
+  practicalGrade  Float
+  finalScore      Float? // Auto calculated
+  predicate       String? // A/B/C/D
+  completion      String? // Tuntas/Belum Tuntas
+  teacherNotes    String?
+  teacherId       String
+  teacher         Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CalendarEvent {
+  id          String         @id @default(cuid())
+  date        DateTime
+  description String
+  type        JenisKalender
+  applicable  String
+  semester    String
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
