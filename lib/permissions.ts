@@ -7,6 +7,7 @@ export type Role = "ADMIN" | "TEACHER";
 // ID di sini harus cocok dengan id pada navItems di app/page.tsx.
 export const TEACHER_ALLOWED_MENU_IDS: string[] = [
   "kurikulum-perangkat-pembelajaran",
+  "kurikulum-perangkat-penilaian",
   "jurnal-mengajar",
 ];
 
