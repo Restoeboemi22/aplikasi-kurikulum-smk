@@ -1,7 +1,8 @@
 # ARSITEKTUR SISTEM MASTER — APLIKASI KURIKULUM SMK
 
-> **Versi:** 2.0.0
+> **Versi:** 2.1.0
 > **Platform:** Next.js (React + TypeScript) + Firebase
+> **Status:** LIVE di https://aplikasi-kurikulum-smk.vercel.app
 > **Tanggal diperbarui:** 19 Juni 2026
 
 ---
@@ -101,7 +102,7 @@ dan memakai Firebase untuk login serta pembedaan hak akses pengguna.
 | Dashboard | ✅ | ❌ |
 | Database (Siswa, Guru, Kelas, Mapel) | ✅ | ❌ |
 | Kurikulum → Perangkat Pembelajaran | ✅ (semua tab) | ✅ **hanya tab "Submit Perangkat"** |
-| Kurikulum → Perangkat Penilaian | ✅ | ❌ |
+| Kurikulum → Perangkat Penilaian | ✅ | ✅ (seluruh halaman; tidak bertab) |
 | Jadwal (Piket, Pelajaran AI) | ✅ | ❌ |
 | Jurnal → Jurnal Mengajar | ✅ (semua tab) | ✅ **hanya tab "Format Jurnal Mengajar"** |
 | Jurnal → Buku Pembinaan | ✅ | ❌ |
@@ -162,8 +163,8 @@ Aplikasi Kurikulum/
 
 ## 5. MODEL DATA
 
-### 5.1 Firestore (aktif untuk auth)
-**Koleksi `users`** — doc id = UID Firebase Auth:
+### 5.1 Firestore (online realtime)
+**Koleksi `users`** — doc id = UID Firebase Auth (akun login):
 ```
 users/{uid}
 ├── nip:   string   (NIP, tanpa domain)
@@ -171,11 +172,24 @@ users/{uid}
 └── role:  string   ("ADMIN" | "TEACHER")
 ```
 
-### 5.2 Data Modul (saat ini di localStorage — sementara)
-Data siswa, guru, kelas, mapel, jadwal, jurnal, nilai masih disimpan di
-`localStorage` browser. Skema referensi (model lama) ada di `prisma/schema.prisma`
-(`User`, `Teacher`, `Curriculum`, `Schedule`, `Journal`, `Student`, `Grade`,
-`CalendarEvent`). Rencana: migrasi ke Firestore (lihat Roadmap).
+**Koleksi `teachers_data`** — doc id auto (data/profil guru, BUKAN akun login):
+```
+teachers_data/{autoId}
+├── kodeGuru:      string
+├── tanggalLahir:  string
+├── name:          string
+├── mataPelajaran: string
+├── tingkatKelas:  string[]   (mis. ["X","XI"])
+├── jurusan:       string[]   (mis. ["TKJ","TKR"])
+└── jenisKelamin:  string
+```
+Dibaca realtime dengan `onSnapshot` → perubahan langsung tampil di semua perangkat.
+
+### 5.2 Data Modul yang MASIH di localStorage (belum dimigrasikan)
+Modul berikut masih simpan data di `localStorage` browser (belum terpusat):
+siswa, mata pelajaran, kelas-jurusan, jadwal, jurnal, buku pembinaan, penilaian
+(UH, Tugas, STS, SAS, Sikap, Raport). Skema referensi lama ada di
+`prisma/schema.prisma`. Rencana: migrasi ke Firestore mengikuti pola `teachers_data`.
 
 ---
 
@@ -198,22 +212,24 @@ Data siswa, guru, kelas, mapel, jadwal, jurnal, nilai masih disimpan di
 ### Sudah selesai ✅
 - Sistem login NIP + password (Firebase Auth).
 - Gate: semua halaman wajib login.
-- Filter menu & tab berbasis role.
+- Filter menu & tab berbasis role (guru: Perangkat Pembelajaran, Perangkat
+  Penilaian, Jurnal Mengajar).
 - Menu admin "Kelola Akun" (buat/hapus akun guru).
 - Sidebar menampilkan user & role asli + logout.
+- Pembersih service worker otomatis (`app/sw-cleanup.tsx`).
 - `npm run build` lolos penuh (perbaikan 122 error type bawaan).
-- Dokumen: `SETUP_FIREBASE.md`, `.env.local.example`.
-
-### Wajib dilakukan pengguna ⏳
-- Setup project Firebase + isi `.env.local` (ikuti `SETUP_FIREBASE.md`).
-- Buat akun admin pertama secara manual.
-- Pasang Firestore Security Rules (penjaga keamanan sebenarnya).
+- **Setup Firebase selesai** (project `kurikulum-smks-pacet`, admin NIP
+  `03041984`, Security Rules terpasang).
+- **Deploy online di Vercel** — auto-deploy tiap push ke GitHub (repo public).
+- **Migrasi Data Guru** ke Firestore (`teachers_data`), realtime.
 
 ### Pengembangan lanjutan (rencana) 🔭
-- Migrasi data modul dari localStorage ke **Firestore** (bertahap per modul).
-- Fitur ganti password untuk guru.
+- Migrasi modul lain dari localStorage ke **Firestore** (siswa, mapel, kelas,
+  jadwal, jurnal, penilaian) — ikuti pola `teachers_data`.
+- Fitur ganti password mandiri untuk guru.
+- Perangkat Penilaian versi khusus guru (submit/lihat miliknya sendiri).
 - Pencabutan login guru sepenuhnya (perlu Admin SDK / manual di Console).
-- Validasi role di Firestore Rules untuk setiap operasi tulis data modul.
+- Validasi role di Firestore Rules untuk setiap koleksi data baru.
 
 ---
 

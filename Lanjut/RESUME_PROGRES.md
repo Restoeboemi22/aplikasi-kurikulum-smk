@@ -1,9 +1,13 @@
-# Resume Progres — Sistem Login & Hak Akses (Role)
+# Resume Progres — Sistem Login, Hak Akses & Deploy
 
 Terakhir diperbarui: 19 Juni 2026
 
 Dokumen ini merangkum apa yang sudah dikerjakan dan apa yang akan dikerjakan
 berikutnya, supaya mudah dilanjutkan di sesi mendatang.
+
+> Catatan untuk sesi mendatang: AI tidak mengingat percakapan sebelumnya.
+> Untuk melanjutkan, buka proyek lalu minta AI membaca file ini + file
+> `Lanjut/ARSITEKTUR_SISTEM_MASTER_APLIKASI.md`.
 
 ---
 
@@ -13,95 +17,137 @@ Membuat web dashboard ini bisa diakses dua jenis pengguna:
 - **Admin sekolah** — akses semua menu.
 - **Guru** — hanya akses menu tertentu yang ditentukan admin.
 
-Menu yang boleh diakses **GURU** (sisanya khusus admin):
-- Kurikulum → Perangkat Pembelajaran → **hanya tab "Submit Perangkat"**
-- Jurnal → Jurnal Mengajar → **hanya tab "Format Jurnal Mengajar"**
+## Status singkat
+
+🟢 **Aplikasi sudah LIVE online:** https://aplikasi-kurikulum-smk.vercel.app
+🟢 Login admin & guru sudah terbukti jalan.
+🟢 Data Guru sudah online realtime (Firestore).
+
+---
 
 ## Keputusan yang sudah diambil
 
 | Hal | Pilihan |
 |---|---|
 | Backend auth | **Firebase** (Authentication + Firestore) |
-| Cara login | **NIP + password** (NIP dipetakan ke email internal `NIP@kurikulum-smk.local`) |
-| Pembuatan akun guru | **Admin yang membuatkan** (guru tidak daftar sendiri) |
+| Cara login | **NIP + password** (NIP dipetakan ke email internal `NIP@kurikulum-smks-pacet.local`) |
+| Pembuatan akun guru | **Admin yang membuatkan** lewat menu "Kelola Akun" (guru tidak daftar sendiri) |
 | Penyimpanan role/profil | Firestore koleksi `users`, doc id = UID |
+| Hosting | **Vercel** (terhubung ke GitHub, auto-deploy tiap push) |
+| Repo GitHub | **Public** — https://github.com/Restoeboemi22/aplikasi-kurikulum-smk |
 
-Catatan arsitektur: aplikasi ini sebelumnya 100% client-side (data di
-localStorage, belum pakai server/database). Firebase dipilih karena auth-nya
-aman & siap pakai tanpa harus membangun server sendiri.
+---
+
+## Menu yang bisa diakses GURU (per saat ini)
+
+Diatur di `lib/permissions.ts` (`TEACHER_ALLOWED_MENU_IDS`):
+1. **Kurikulum → Perangkat Pembelajaran** → hanya tab **"Submit Perangkat"**
+2. **Kurikulum → Perangkat Penilaian** → seluruh halaman (halaman ini tidak bertab)
+3. **Jurnal → Jurnal Mengajar** → hanya tab **"Format Jurnal Mengajar"**
+
+Sisanya (Dashboard, Database, Jadwal, Penilaian, Kelola Akun, Pengaturan) khusus admin.
+
+> Catatan: halaman "Perangkat Penilaian" sebenarnya tampilan MONITORING admin
+> (daftar semua guru + status verifikasi). Guru melihat tampilan yang sama.
+> Kalau mau guru hanya submit/lihat miliknya sendiri, perlu dibuatkan tab khusus.
 
 ---
 
 ## SUDAH SELESAI ✅
 
-### Kode (sudah tertulis di disk)
-- `lib/firebase.ts` — inisialisasi Firebase (lazy/aman bila env kosong), helper
-  `nipToEmail()`, dan `withSecondaryAuth()` (membuat akun guru tanpa membuat
-  sesi admin ketendang).
-- `lib/permissions.ts` — satu sumber kebenaran hak akses: `canAccessMenu()`,
-  `canAccessTab()`, `defaultTabFor()`. **Di sinilah daftar menu/tab yang boleh
-  diakses guru diatur** (`TEACHER_ALLOWED_MENU_IDS`, `TEACHER_ALLOWED_TABS`).
-- `lib/auth-context.tsx` — `AuthProvider` + hook `useAuth()` (state user, role,
-  login, logout, status `configured`).
-- `app/login/page.tsx` — halaman login NIP + password, plus banner bila Firebase
-  belum dikonfigurasi.
-- `app/kelola-akun/page.tsx` — menu admin untuk membuat & menghapus akun guru.
-- `app/page.tsx` — gate (wajib login), filter menu sesuai role, tampilkan
-  nama/role asli + tombol logout, penjagaan "Akses Ditolak".
-- `app/layout.tsx` — membungkus app dengan `AuthProvider`.
+### Autentikasi & hak akses
+- `lib/firebase.ts` — init Firebase (lazy/aman), `nipToEmail()`,
+  `withSecondaryAuth()` (buat akun guru tanpa sesi admin ketendang).
+  Domain NIP: `kurikulum-smks-pacet.local`.
+- `lib/permissions.ts` — sumber kebenaran hak akses (menu & tab guru).
+- `lib/auth-context.tsx` — `AuthProvider` + `useAuth()`.
+- `app/login/page.tsx` — halaman login NIP + password.
+- `app/kelola-akun/page.tsx` — admin buat/hapus akun guru.
+- `app/page.tsx` — gate login, filter menu per role, user asli + logout,
+  penjaga "Akses Ditolak".
 - `app/jurnal-mengajar/page.tsx` & `app/kurikulum-perangkat-pembelajaran/page.tsx`
   — tab dibatasi sesuai role.
 
-### Perbaikan tambahan
-- Membereskan **122 error TypeScript** bawaan di ~19 file lama (implicit-any dll)
-  yang selama ini tersembunyi karena proyek belum pernah di-build.
-- `npm run build` sekarang **lolos penuh** (24 halaman ter-prerender, tanpa error).
+### Setup Firebase (SUDAH dilakukan)
+- Project Firebase `kurikulum-smks-pacet` aktif.
+- Email/Password + Firestore aktif.
+- Akun admin pertama dibuat: NIP `03041984` (Anik Yunani, S.Pd), role ADMIN.
+- Firestore Security Rules sudah dipasang (untuk `users` & `teachers_data`).
+- `.env.local` terisi (tidak ikut git — aman).
 
-### Dokumen
-- `SETUP_FIREBASE.md` — panduan setup Firebase langkah demi langkah.
-- `.env.local.example` — template variabel lingkungan Firebase.
+### Deploy (SUDAH dilakukan)
+- Repo di GitHub (public), terhubung ke Vercel, auto-deploy tiap push ke `main`.
+- 6 env Firebase di-set di Vercel (Production).
+- Domain Vercel sudah didaftarkan di Firebase → Authorized domains.
+- Identitas commit lokal di-set ke `Restoeboemi22` (agar Vercel Hobby tidak
+  memblokir deploy).
+
+### Data online (migrasi Firestore)
+- **Data Guru** (menu Database → Data Guru) sudah pindah dari localStorage ke
+  Firestore koleksi `teachers_data`, dengan **realtime sync** (`onSnapshot`).
+  Tambah/edit/hapus langsung tersinkron di semua perangkat.
+
+### Lain-lain
+- `app/sw-cleanup.tsx` — pembersih service worker & cache nyasar otomatis
+  (mencegah masalah "muter-muter" / versi lama tidak ter-update).
+- Membereskan 122 error TypeScript bawaan → `npm run build` lolos penuh.
+- Dokumen: `SETUP_FIREBASE.md`, `.env.local.example`.
 
 ---
 
 ## BELUM DIKERJAKAN / LANGKAH SELANJUTNYA ⏳
 
-### A. Setup Firebase (di tangan kamu — wajib agar login berfungsi)
-Ikuti `SETUP_FIREBASE.md`:
-1. Buat project Firebase, aktifkan **Email/Password** + **Firestore**.
-2. Salin `.env.local.example` → `.env.local`, isi config, lalu restart server.
-3. Buat **1 akun admin** manual via Firebase Console (Authentication + dokumen
-   Firestore `users/<UID>` dengan field `role = ADMIN`).
-4. Tempel **Firestore Security Rules** (ada di panduan) — ini penjaga keamanan
-   sebenarnya, jangan dilewati.
+### Data yang MASIH di localStorage (belum online)
+Semua modul ini masih simpan data di browser (belum terpusat/realtime):
+- Data Siswa, Mata Pelajaran, Kelas-Jurusan
+- Jadwal (piket, pelajaran), Jurnal, Buku Pembinaan
+- Penilaian (UH, Tugas, STS, SAS, Sikap, Raport)
 
-### B. Git (opsional tapi disarankan)
-- Perubahan **belum di-commit**. Disarankan commit ke branch baru agar progres
-  aman & bisa di-rollback.
+Pola migrasi sudah terbukti di **Data Guru** — modul lain bisa mengikuti pola
+sama: koleksi Firestore + `onSnapshot` + addDoc/updateDoc/deleteDoc, dan
+tambahkan aturannya di Firestore Rules.
 
-### C. Pengembangan lanjutan (ide, belum disepakati)
-- Migrasi data aplikasi (siswa, guru, nilai, dll) dari **localStorage ke
-  Firestore** supaya data tersimpan terpusat & sinkron antar perangkat. Ini
-  pekerjaan besar & terpisah — sebaiknya bertahap per modul.
-- Fitur "ganti password" untuk guru.
-- Mencabut login guru sepenuhnya saat dihapus (saat ini menghapus profil/role di
-  Firestore; hapus user di Authentication perlu Admin SDK atau manual di Console).
-- Audit: pastikan setiap aksi tulis data (jurnal, nilai) juga divalidasi role-nya
-  di Firestore Rules, bukan hanya disembunyikan di UI.
+### Fitur yang diminta tapi belum dibuat
+- **Ganti password mandiri untuk guru** (sekarang harus lewat admin/Console).
+- Perangkat Penilaian versi "khusus guru" (submit/lihat miliknya sendiri),
+  kalau tidak mau guru melihat data semua guru.
+
+### Catatan teknis
+- Hapus akun di "Kelola Akun" hanya menghapus profil/role (Firestore). Untuk
+  mencabut login total, hapus juga user di Authentication (Console/Admin SDK).
+- Token Vercel yang dipakai saat deploy sudah tidak valid/dicabut — kalau perlu
+  deploy manual via CLI lagi, buat token baru. (Tidak wajib: auto-deploy jalan
+  tiap push ke GitHub.)
 
 ---
 
-## Cara menjalankan & review
+## Cara kerja sehari-hari
+
+**Menambah akun guru (admin):**
+1. Login admin → menu **Kelola Akun**.
+2. Isi NIP, Nama, Password awal, pilih hak akses **Guru** → **Buat Akun**.
+3. Beri tahu guru NIP + password-nya.
+
+**Update aplikasi (developer):**
+- Ubah kode → commit → `git push origin main` → Vercel auto-deploy.
+
+**Mengubah hak akses menu/tab guru:**
+- Edit `lib/permissions.ts` (`TEACHER_ALLOWED_MENU_IDS`, `TEACHER_ALLOWED_TABS`).
+  ID harus cocok dengan id menu di `app/page.tsx`.
+
+---
+
+## Cara menjalankan lokal
 
 ```bash
-npm run dev      # mode pengembangan (untuk review)
-npm run build    # build produksi (verifikasi, sudah lolos)
+npm install
+npm run dev      # pengembangan (localhost)
+npm run build    # build produksi (verifikasi)
 ```
 
-Sebelum Firebase dikonfigurasi: halaman login tampil dengan banner kuning
-"Firebase belum dikonfigurasi" — itu normal.
+## Identitas penting
 
-## Tempat penting untuk mengubah hak akses
-
-Kalau nanti mau menamb/mengurangi menu atau tab yang boleh diakses guru, cukup
-ubah di **`lib/permissions.ts`** (`TEACHER_ALLOWED_MENU_IDS` dan
-`TEACHER_ALLOWED_TABS`). ID-nya harus cocok dengan id menu di `app/page.tsx`.
+- URL aplikasi: https://aplikasi-kurikulum-smk.vercel.app
+- Repo: https://github.com/Restoeboemi22/aplikasi-kurikulum-smk
+- Project Firebase: `kurikulum-smks-pacet`
+- Admin: NIP `03041984` (Anik Yunani, S.Pd)
