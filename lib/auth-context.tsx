@@ -13,8 +13,7 @@ import {
   signOut,
   User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { getAuthSafe, getDbSafe, nipToEmail, isFirebaseConfigured } from "@/lib/firebase";
+import { getAuthSafe, loginUsernameToEmail, isFirebaseConfigured } from "@/lib/firebase";
 import { Role } from "@/lib/permissions";
 
 export interface AppUser {
@@ -22,29 +21,70 @@ export interface AppUser {
   nip: string;
   name: string;
   role: Role;
+  isHomeroomTeacher: boolean;
+  homeroomClassNames: string[];
 }
 
 interface AuthContextValue {
   user: AppUser | null;
   loading: boolean;
   configured: boolean;
-  login: (nip: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function loadProfile(fbUser: FirebaseUser): Promise<AppUser> {
-  // Profil & role disimpan di Firestore koleksi "users", doc id = uid.
-  const snap = await getDoc(doc(getDbSafe(), "users", fbUser.uid));
-  const data = snap.exists() ? snap.data() : {};
+async function loadProfile(): Promise<AppUser> {
+  const response = await fetch("/api/auth/me", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Gagal memuat profil session.");
+  }
+
+  const result = await response.json();
+  const user = result.user;
+
   return {
-    uid: fbUser.uid,
-    nip: (data.nip as string) ?? fbUser.email?.split("@")[0] ?? "",
-    name: (data.name as string) ?? "Pengguna",
-    // Default ke TEACHER bila role tidak diset, demi keamanan (least privilege).
-    role: (data.role as Role) === "ADMIN" ? "ADMIN" : "TEACHER",
+    uid: user.uid,
+    nip: user.nip ?? "",
+    name: user.name ?? "Pengguna",
+    role: (user.role as Role) === "ADMIN" ? "ADMIN" : "TEACHER",
+    isHomeroomTeacher: Boolean(user.isHomeroomTeacher),
+    homeroomClassNames: Array.isArray(user.homeroomClassNames) ? user.homeroomClassNames : [],
   };
+}
+
+function mapSessionUser(user: any): AppUser {
+  return {
+    uid: user.uid,
+    nip: user.nip ?? "",
+    name: user.name ?? "Pengguna",
+    role: (user.role as Role) === "ADMIN" ? "ADMIN" : "TEACHER",
+    isHomeroomTeacher: Boolean(user.isHomeroomTeacher),
+    homeroomClassNames: Array.isArray(user.homeroomClassNames) ? user.homeroomClassNames : [],
+  };
+}
+
+async function syncServerSession(fbUser: FirebaseUser): Promise<AppUser> {
+  const idToken = await fbUser.getIdToken();
+
+  const response = await fetch("/api/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => null);
+    throw new Error(result?.error || "Gagal menyinkronkan session server.");
+  }
+
+  const result = await response.json().catch(() => null);
+  if (!result?.user) {
+    throw new Error("Profil session server tidak ditemukan.");
+  }
+
+  return mapSessionUser(result.user);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -61,9 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(getAuthSafe(), async (fbUser) => {
       if (fbUser) {
         try {
-          setUser(await loadProfile(fbUser));
+          const sessionUser = await syncServerSession(fbUser);
+          setUser(sessionUser);
         } catch {
-          setUser(null);
+          try {
+            const profileUser = await loadProfile();
+            setUser(profileUser);
+          } catch {
+            setUser(null);
+          }
         }
       } else {
         setUser(null);
@@ -73,11 +119,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, []);
 
-  const login = async (nip: string, password: string) => {
-    await signInWithEmailAndPassword(getAuthSafe(), nipToEmail(nip), password);
+  const login = async (username: string, password: string) => {
+    const credential = await signInWithEmailAndPassword(
+      getAuthSafe(),
+      loginUsernameToEmail(username),
+      password
+    );
+    setUser(await syncServerSession(credential.user));
   };
 
   const logout = async () => {
+    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
     await signOut(getAuthSafe());
   };
 

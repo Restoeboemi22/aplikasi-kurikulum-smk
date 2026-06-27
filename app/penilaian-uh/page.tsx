@@ -1,341 +1,564 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Download, Edit, Trash2, Eye, CheckCircle2, Clock, Filter, Calendar, Users, BookOpen } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Save, Download, Upload } from "lucide-react";
+import * as XLSX from "xlsx";
+import { ClassMajorOption } from "@/lib/class-major-options";
+import { useAuth } from "@/lib/auth-context";
+import {
+  getTeacherClassOptions,
+  getTeacherSubjectOptions,
+  resolveCurrentTeacher,
+  type CurrentTeacher,
+} from "@/lib/current-teacher";
+import {
+  buildSemesterLabel,
+  getAcademicYearOptions,
+  getDefaultGradePeriod,
+  SEMESTER_OPTIONS,
+} from "@/lib/grade-period";
 
-// Default data
-const DEFAULT_TEACHERS = [
-  { id: 1, name: "Pak Budi Santoso", mataPelajaran: "Informatika" },
-  { id: 2, name: "Bu Siti Aminah", mataPelajaran: "Matematika" },
-  { id: 3, name: "Pak Anton Wijaya", mataPelajaran: "Dasar-Dasar Program Keahlian" },
-];
+interface Student {
+  id: string;
+  nis: string;
+  name: string;
+  gender: string;
+  className?: string;
+  nilai1?: string;
+  nilai2?: string;
+  nilai3?: string;
+}
 
-const DEFAULT_CLASSES = [
-  { id: 1, className: "X TKJ 1", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", grade: "X" },
-  { id: 2, className: "X TKJ 2", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", grade: "X" },
-  { id: 3, className: "X TKR 1", major: "Teknik Kendaraan Ringan", majorCode: "TKR", grade: "X" },
-];
+interface GradeRecord {
+  studentId: string;
+  nilai1?: string | null;
+  nilai2?: string | null;
+  nilai3?: string | null;
+}
 
-const DEFAULT_SUBJECTS = [
-  { id: 1, name: "Pendidikan Agama dan Budi Pekerti", code: "PABP" },
-  { id: 2, name: "Pendidikan Pancasila", code: "PPKn" },
-  { id: 3, name: "Bahasa Indonesia", code: "BIN" },
-  { id: 4, name: "Matematika", code: "MTK" },
-  { id: 5, name: "Informatika", code: "IF" },
-];
+const clampScore = (raw: string): string => {
+  if (raw === "" || raw === "-") return raw;
+  const n = parseFloat(raw);
+  if (isNaN(n)) return "";
+  const clamped = Math.min(100, Math.max(0, n));
+  return String(clamped);
+};
 
-const DEFAULT_EXAMS = [
-  { id: 1, date: "12 Juni 2024", className: "X TKJ 1", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", subject: "Informatika", teacher: "Pak Budi Santoso", topic: "Variabel dan Tipe Data", status: "Sudah", totalStudents: 32, gradedStudents: 32, submittedDate: "12 Juni 2024" },
-  { id: 2, date: "13 Juni 2024", className: "X TKJ 1", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", subject: "Matematika", teacher: "Bu Siti Aminah", topic: "SQL Query Dasar", status: "Sudah", totalStudents: 32, gradedStudents: 25, submittedDate: "13 Juni 2024" },
-  { id: 3, date: "14 Juni 2024", className: "X TKR 1", major: "Teknik Kendaraan Ringan", majorCode: "TKR", subject: "Dasar-Dasar Program Keahlian", teacher: "Pak Anton Wijaya", topic: "Proyeksi Orto", status: "Belum", totalStudents: 28, gradedStudents: 0, submittedDate: "" },
-];
-
-export default function DailyExamPage() {
-  const [isClient, setIsClient] = useState(false);
-  
-  // Filter states
-  const [selectedTeacher, setSelectedTeacher] = useState("");
-  const [selectedGrade, setSelectedGrade] = useState("");
-  const [selectedMajor, setSelectedMajor] = useState("");
+export default function PenilaianUHPage() {
+  const defaultPeriod = getDefaultGradePeriod();
+  const { user } = useAuth();
+  const role = user?.role ?? "TEACHER";
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
-  
-  // Data from localStorage
-  const [teachers, setTeachers] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-teachers');
-      return saved ? JSON.parse(saved) : DEFAULT_TEACHERS;
-    }
-    return DEFAULT_TEACHERS;
-  });
+  const [selectedSemester, setSelectedSemester] = useState(defaultPeriod.term);
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState(defaultPeriod.academicYear);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [classMajors, setClassMajors] = useState<ClassMajorOption[]>([]);
+  const [currentTeacher, setCurrentTeacher] = useState<CurrentTeacher | null>(null);
+  const [subjectCatalog, setSubjectCatalog] = useState<string[]>([]);
+  const [teacherLoading, setTeacherLoading] = useState(true);
+  const [teacherError, setTeacherError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const academicYearOptions = getAcademicYearOptions();
+  const subjectOptions =
+    role === "ADMIN" ? subjectCatalog : getTeacherSubjectOptions(currentTeacher);
+  const teacherClassAssignments =
+    role === "ADMIN" ? [] : getTeacherClassOptions(currentTeacher, selectedSubject);
 
-  const [classes, setClasses] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-classes');
-      return saved ? JSON.parse(saved) : DEFAULT_CLASSES;
-    }
-    return DEFAULT_CLASSES;
-  });
+  // Dapatkan daftar kelas yang tersedia: untuk admin semua kelas, untuk guru hanya kelas yang ditugaskan
+  const availableClasses = role === "ADMIN" 
+    ? classMajors 
+    : classMajors.filter((cls) => 
+        teacherClassAssignments.some(
+          (assignment) => 
+            assignment.className === cls.className
+        )
+      );
 
-  const [subjects, setSubjects] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-subjects');
-      return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
-    }
-    return DEFAULT_SUBJECTS;
-  });
-
-  const [exams, setExams] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-daily-exams');
-      return saved ? JSON.parse(saved) : DEFAULT_EXAMS;
-    }
-    return DEFAULT_EXAMS;
-  });
-
-  // Sync data
   useEffect(() => {
-    setIsClient(true);
-    
-    const updateData = () => {
-      const savedTeachers = localStorage.getItem('kurikulum-smk-teachers');
-      if (savedTeachers) setTeachers(JSON.parse(savedTeachers));
-      
-      const savedClasses = localStorage.getItem('kurikulum-smk-classes');
-      if (savedClasses) setClasses(JSON.parse(savedClasses));
-      
-      const savedSubjects = localStorage.getItem('kurikulum-smk-subjects');
-      if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
-    };
-    
-    window.addEventListener('storage', updateData);
-    updateData();
-    return () => window.removeEventListener('storage', updateData);
+    fetchClassMajors();
   }, []);
 
-  // Save exams to localStorage whenever it changes
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-daily-exams', JSON.stringify(exams));
+    loadSubjects();
+  }, []);
+
+  useEffect(() => {
+    loadCurrentTeacher();
+  }, [role, user?.uid, user?.nip, user?.name]);
+
+  useEffect(() => {
+    if (!subjectOptions.length) {
+      setSelectedSubject("");
+      return;
     }
-  }, [exams, isClient]);
 
-  // Get filtered exams
-  const filteredExams = exams.filter((item: any) => {
-    const teacherMatch = !selectedTeacher || item.teacher === selectedTeacher;
-    const gradeMatch = !selectedGrade || item.className.startsWith(selectedGrade);
-    const majorMatch = !selectedMajor || item.majorCode === selectedMajor;
-    const subjectMatch = !selectedSubject || item.subject === selectedSubject;
-    const statusMatch = !selectedStatus || item.status === selectedStatus;
-    return teacherMatch && gradeMatch && majorMatch && subjectMatch && statusMatch;
-  });
+    if (!subjectOptions.includes(selectedSubject)) {
+      setSelectedSubject(subjectOptions[0]);
+    }
+  }, [selectedSubject, subjectOptions]);
 
-  // Stats calculation
-  const totalExams = filteredExams.length;
-  const completedExams = filteredExams.filter((e: any) => e.status === "Sudah").length;
-  const pendingExams = filteredExams.filter((e: any) => e.status === "Belum").length;
+  useEffect(() => {
+    if (selectedClassId && !availableClasses.some((cls) => cls.id === selectedClassId)) {
+      setSelectedClassId("");
+    }
+  }, [availableClasses, selectedClassId]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Sudah": return "bg-green-100 text-green-700";
-      case "Belum": return "bg-red-100 text-red-700";
-      default: return "bg-gray-100 text-gray-700";
+  useEffect(() => {
+    if (selectedClassId && selectedSubject && (role === "ADMIN" || currentTeacher)) {
+      fetchStudents();
+    } else {
+      setStudents([]);
+    }
+  }, [selectedClassId, currentTeacher?.id, role, selectedSubject, selectedSemester, selectedAcademicYear]);
+
+  const fetchClassMajors = async () => {
+    try {
+      const res = await fetch("/api/class-majors");
+      if (res.ok) {
+        const data = await res.json();
+        setClassMajors(data);
+      }
+    } catch (error) {
+      console.error("Error fetching class majors:", error);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Sudah": return <CheckCircle2 size={16} />;
-      case "Belum": return <Clock size={16} />;
-      default: return <Clock size={16} />;
+  const loadSubjects = async () => {
+    try {
+      const response = await fetch("/api/subjects", { cache: "no-store" });
+      if (!response.ok) return;
+
+      const subjects = await response.json();
+      setSubjectCatalog(
+        subjects
+          .map((subject: { name?: string }) => subject.name?.trim() || "")
+          .filter(Boolean)
+      );
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
     }
   };
+
+  const loadCurrentTeacher = async () => {
+    if (role === "ADMIN") {
+      setCurrentTeacher(null);
+      setTeacherError("");
+      setTeacherLoading(false);
+      return;
+    }
+
+    setTeacherLoading(true);
+    setTeacherError("");
+    try {
+      const teacher = await resolveCurrentTeacher(user);
+      if (!teacher) {
+        setCurrentTeacher(null);
+        setTeacherError("Profil guru aktif tidak ditemukan di database admin.");
+        return;
+      }
+
+      setCurrentTeacher(teacher);
+    } catch (error: any) {
+      setCurrentTeacher(null);
+      setTeacherError(error.message || "Gagal memuat profil guru aktif.");
+    } finally {
+      setTeacherLoading(false);
+    }
+  };
+
+  const fetchStudents = async () => {
+    if (!(role === "ADMIN" || currentTeacher) || !selectedSubject) return;
+    const selectedClass = classMajors.find((cls) => cls.id === selectedClassId);
+    if (!selectedClass) return;
+
+    setIsLoading(true);
+    try {
+      const gradeParams = new URLSearchParams({
+        classLevel: selectedClass.grade,
+        major: selectedClass.majorCode,
+        jenisPenilaian: "UH",
+        subject: selectedSubject,
+        semester: buildSemesterLabel(selectedSemester, selectedAcademicYear),
+      });
+      if (currentTeacher?.id) {
+        gradeParams.set("teacherId", currentTeacher.id);
+      }
+
+      const [studentRes, gradeRes] = await Promise.all([
+        fetch(
+          `/api/students?${new URLSearchParams({
+            classLevel: selectedClass.grade,
+            major: selectedClass.majorCode,
+            subject: selectedSubject,
+          }).toString()}`
+        ),
+        fetch(`/api/grades?${gradeParams.toString()}`),
+      ]);
+
+      if (studentRes.ok && gradeRes.ok) {
+        const studentData = await studentRes.json();
+        const gradeData: GradeRecord[] = await gradeRes.json();
+        const gradeMap = new Map(gradeData.map((grade) => [grade.studentId, grade]));
+        const filteredStudents = studentData.filter((s: Student) => {
+          const className = s.className || "";
+          return className === selectedClass.className;
+        }).map((s: any) => ({
+          id: s.id,
+          nis: s.nis,
+          name: s.name,
+          gender: s.gender === "Laki-laki" ? "L" : "P",
+          className: s.className,
+          nilai1: gradeMap.get(s.id)?.nilai1 || "",
+          nilai2: gradeMap.get(s.id)?.nilai2 || "",
+          nilai3: gradeMap.get(s.id)?.nilai3 || ""
+        }));
+        setStudents(filteredStudents);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExport = () => {
+    const selectedClass = classMajors.find((cls) => cls.id === selectedClassId);
+    const data = students.map((s, idx) => ({
+      "NO": idx + 1,
+      "NAMA SISWA": s.name,
+      "L/P": s.gender,
+      "AH 1": s.nilai1 || "",
+      "AH 2": s.nilai2 || "",
+      "AH 3": s.nilai3 || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Nilai AH");
+    
+    // Generate descriptive filename
+    const cleanKelas = selectedClass?.className.replace(/\s+/g, "_") || "";
+    const cleanMapel = selectedSubject.replace(/\s+/g, "_");
+    const cleanTahunAjaran = selectedAcademicYear.replace(/\//g, "-");
+    const fileName = `AH_${cleanKelas}_${cleanMapel}_${selectedSemester}_${cleanTahunAjaran}.xlsx`;
+    
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      const wb = XLSX.read(bstr, { type: "binary" });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+
+      setStudents((prevStudents) => {
+        const updatedStudents = [...prevStudents];
+        data.forEach((row: any) => {
+          const studentName = row["NAMA SISWA"]?.toString().trim().toUpperCase();
+          if (!studentName) return;
+
+          const studentIndex = updatedStudents.findIndex(
+            (s) => s.name.trim().toUpperCase() === studentName
+          );
+
+          if (studentIndex !== -1) {
+            updatedStudents[studentIndex] = {
+              ...updatedStudents[studentIndex],
+              nilai1: clampScore(row["AH 1"]?.toString() || row["UH 1"]?.toString() || ""),
+              nilai2: clampScore(row["AH 2"]?.toString() || row["UH 2"]?.toString() || ""),
+              nilai3: clampScore(row["AH 3"]?.toString() || row["UH 3"]?.toString() || ""),
+            };
+          }
+        });
+        return updatedStudents;
+      });
+    };
+    reader.readAsBinaryString(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const updateField = (id: string, field: keyof Student, value: string) => {
+    setStudents((prevStudents) =>
+      prevStudents.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              [field]: field.startsWith("nilai") ? clampScore(value) : value,
+            }
+          : s
+      )
+    );
+  };
+
+  const handleKirim = async () => {
+    if (!selectedClassId) {
+      setMessage({ text: "Pilih kelas terlebih dahulu!", type: "error" });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    const selectedClass = classMajors.find((cls) => cls.id === selectedClassId);
+    if (!selectedClass) return;
+
+    if (!selectedSubject) {
+      setMessage({ text: "Mata pelajaran belum dipilih.", type: "error" });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    if (!currentTeacher) {
+      setMessage({ text: "Akun ini belum terhubung ke profil guru, jadi belum bisa mengirim nilai.", type: "error" });
+      setTimeout(() => setMessage(null), 5000);
+      return;
+    }
+
+    setIsLoading(true);
+    setMessage(null);
+
+    try {
+      for (const student of students) {
+        if (!student.name.trim()) continue;
+
+        const response = await fetch("/api/grades", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            studentName: student.name,
+            classLevel: selectedClass.grade,
+            major: selectedClass.majorCode,
+            subject: selectedSubject,
+            semester: buildSemesterLabel(selectedSemester, selectedAcademicYear),
+            jenisPenilaian: "UH",
+            nilai1: student.nilai1,
+            nilai2: student.nilai2,
+            nilai3: student.nilai3,
+          }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => null);
+          throw new Error(result?.error || `Gagal mengirim nilai AH untuk ${student.name}.`);
+        }
+      }
+
+      setMessage({ text: "Data penilaian AH berhasil dikirim ke admin!", type: "success" });
+    } catch (error) {
+      console.error(error);
+      setMessage({ text: error instanceof Error ? error.message : "Gagal mengirim data!", type: "error" });
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setMessage(null), 5000);
+    }
+  };
+
+  const hitungRataRata = (s: Student) => {
+    const nilai = [s.nilai1, s.nilai2, s.nilai3].filter(n => n && n !== "-").map(Number);
+    if (nilai.length === 0) return null;
+    return (nilai.reduce((a, b) => a + b, 0) / nilai.length).toFixed(1);
+  };
+
+  const inputCls = "w-full px-1 py-1 text-center text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-pink-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-800">Monitoring Nilai UH (Ulangan Harian)</h3>
-          <p className="text-sm text-gray-500">Monitor progress pengumpulan nilai UH oleh semua guru</p>
-        </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg hover:bg-gray-50 transition">
-            <Download size={18} />
-            Export
-          </button>
-          <button className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition">
-            <Plus size={18} />
-            Tambah Ulangan
-          </button>
+          <h3 className="text-lg font-semibold text-gray-800">Asesmen Harian (AH)</h3>
+          <p className="text-sm text-gray-500">Input nilai AH per siswa</p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-xl">
-              <BookOpen size={24} className="text-blue-600" />
-            </div>
-            <div>
-              <h4 className="text-sm text-gray-500 mb-1">Total UH</h4>
-              <p className="text-3xl font-bold text-gray-800">{totalExams}</p>
-            </div>
-          </div>
+      {teacherError && role !== "ADMIN" && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {teacherError}
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-xl">
-              <CheckCircle2 size={24} className="text-green-600" />
-            </div>
-            <div>
-              <h4 className="text-sm text-green-600 mb-1">Sudah Dikumpulkan</h4>
-              <p className="text-3xl font-bold text-green-700">{completedExams}</p>
-            </div>
-          </div>
+      )}
+
+      {(currentTeacher || role === "ADMIN") && (
+        <div className="rounded-xl border bg-white px-4 py-3 text-sm text-gray-600">
+          {role === "ADMIN" ? (
+            <>Mode admin: <span className="font-semibold text-gray-800">memakai daftar mata pelajaran master</span></>
+          ) : (
+            <>Guru aktif: <span className="font-semibold text-gray-800">{currentTeacher?.name}</span></>
+          )}
+          {" · "}Mapel: <span className="font-semibold text-gray-800">{selectedSubject || "-"}</span>
+          {" · "}Periode: <span className="font-semibold text-gray-800">{selectedSemester} {selectedAcademicYear}</span>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-red-100 rounded-xl">
-              <Clock size={24} className="text-red-600" />
-            </div>
-            <div>
-              <h4 className="text-sm text-red-600 mb-1">Belum Dikumpulkan</h4>
-              <p className="text-3xl font-bold text-red-700">{pendingExams}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Filter Section */}
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">Filter:</span>
-          </div>
-          
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Guru</label>
-            <select 
-              value={selectedTeacher}
-              onChange={(e) => setSelectedTeacher(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Semua Guru</option>
-              {isClient && teachers.map((teacher: any) => (
-                <option key={teacher.id} value={teacher.name}>{teacher.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Tingkat</label>
-            <select 
-              value={selectedGrade}
-              onChange={(e) => setSelectedGrade(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Semua Tingkat</option>
-              <option value="X">X</option>
-              <option value="XI">XI</option>
-              <option value="XII">XII</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Jurusan</label>
-            <select 
-              value={selectedMajor}
-              onChange={(e) => setSelectedMajor(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Semua Jurusan</option>
-              <option value="TKJ">TKJ</option>
-              <option value="TKR">TKR</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Mata Pelajaran</label>
-            <select 
-              value={selectedSubject}
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Semua Mata Pelajaran</option>
-              {isClient && subjects.map((subj: any) => (
-                <option key={subj.id} value={subj.name}>{subj.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Status</label>
-            <select 
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Semua Status</option>
-              <option value="Sudah">Sudah Dikumpulkan</option>
-              <option value="Belum">Belum Dikumpulkan</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Table Section */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tanggal UH</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Mata Pelajaran</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Kelas</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Jurusan</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Topik</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Progress Nilai</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Status</th>
-              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tgl. Dikumpulkan</th>
-              <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredExams.map((item: any) => (
-              <tr key={item.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <Calendar size={16} className="text-gray-400" />
-                    {item.date}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-gray-800 font-medium">{item.teacher}</td>
-                <td className="px-6 py-4 text-gray-600">{item.subject}</td>
-                <td className="px-6 py-4 text-gray-600">{item.className}</td>
-                <td className="px-6 py-4 text-gray-600">{item.major}</td>
-                <td className="px-6 py-4 text-gray-600">{item.topic}</td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${item.status === "Sudah" ? "bg-green-500" : "bg-blue-500"}`}
-                        style={{ width: `${(item.gradedStudents / item.totalStudents) * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-600">
-                      {item.gradedStudents}/{item.totalStudents}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                    {getStatusIcon(item.status)}
-                    {item.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-600">
-                  {item.submittedDate || "-"}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button className="p-2 hover:bg-gray-100 rounded-lg" title="Lihat Nilai">
-                      <Eye size={16} className="text-gray-600" />
-                    </button>
-                    <button className="p-2 hover:bg-blue-100 rounded-lg" title="Edit">
-                      <Edit size={16} className="text-blue-600" />
-                    </button>
-                    <button className="p-2 hover:bg-red-100 rounded-lg" title="Hapus">
-                      <Trash2 size={16} className="text-red-600" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+      {/* Filter Options */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border flex flex-wrap items-center gap-4">
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-gray-600 mb-1">Kelas</label>
+          <select
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none"
+            value={selectedClassId}
+            onChange={(e) => setSelectedClassId(e.target.value)}
+          >
+            <option value="">-- Pilih Kelas --</option>
+            {availableClasses.map((kelas) => (
+              <option key={kelas.id} value={kelas.id}>
+                {kelas.className}
+              </option>
             ))}
-          </tbody>
-        </table>
+          </select>
+        </div>
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-gray-600 mb-1">Mata Pelajaran</label>
+          <select
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none"
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            disabled={teacherLoading || subjectOptions.length === 0}
+          >
+            <option value="">-- Pilih Mata Pelajaran --</option>
+            {subjectOptions.map((subject) => (
+              <option key={subject} value={subject}>
+                {subject}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-gray-600 mb-1">Semester</label>
+          <select
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none"
+            value={selectedSemester}
+            onChange={(e) => setSelectedSemester(e.target.value as "Ganjil" | "Genap")}
+          >
+            {SEMESTER_OPTIONS.map((semester) => (
+              <option key={semester} value={semester}>
+                {semester}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col">
+          <label className="text-xs font-semibold text-gray-600 mb-1">Tahun Ajaran</label>
+          <select
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-pink-400 outline-none"
+            value={selectedAcademicYear}
+            onChange={(e) => setSelectedAcademicYear(e.target.value)}
+          >
+            {academicYearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      {/* Message */}
+      {message && (
+        <div className={`p-4 rounded-lg border ${
+          message.type === "success" 
+            ? "bg-green-50 border-green-200 text-green-800" 
+            : "bg-red-50 border-red-200 text-red-800"
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      {!selectedClassId || !selectedSubject ? (
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-500">
+          Silakan pilih <b>Kelas</b> dan <b>Mata Pelajaran</b> terlebih dahulu untuk menampilkan data siswa.
+        </div>
+      ) : isLoading || teacherLoading ? (
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-500">
+          Memuat data siswa...
+        </div>
+      ) : students.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-500">
+          Belum ada siswa untuk {classMajors.find((cls) => cls.id === selectedClassId)?.className} di database.
+        </div>
+      ) : (
+        <>
+          {role !== "ADMIN" && (
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm"
+              >
+                <Download size={16} /> Download Format
+              </button>
+
+              <input
+                type="file"
+                accept=".xlsx, .xls"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleImport}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm"
+              >
+                <Upload size={16} /> Upload Nilai
+              </button>
+
+              <button
+                onClick={handleKirim}
+                disabled={isLoading}
+                className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save size={16} /> {isLoading ? "Mengirim..." : "Kirim"}
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
+            <table className="border-collapse text-xs w-full">
+              <thead className="text-gray-700">
+                <tr>
+                  <th className="border border-gray-400 bg-gray-100 px-2 py-2 w-12 text-center">NO</th>
+                  <th className="border border-gray-400 bg-gray-100 px-4 py-2 text-left min-w-[250px]">NAMA SISWA</th>
+                  <th className="border border-gray-400 bg-gray-100 px-2 py-2 w-16 text-center">L/P</th>
+                  <th colSpan={4} className="border border-gray-400 bg-gray-100 px-2 py-2 text-center">ASESMEN HARIAN (AH)</th>
+                </tr>
+                <tr>
+                  <th colSpan={3}></th>
+                  <th className="border border-gray-400 bg-gray-100 px-2 py-2 w-16 text-center">1</th>
+                  <th className="border border-gray-400 bg-gray-100 px-2 py-2 w-16 text-center">2</th>
+                  <th className="border border-gray-400 bg-gray-100 px-2 py-2 w-16 text-center">3</th>
+                  <th className="border border-gray-400 bg-[#fffe03] font-bold text-center px-2 py-2 w-16 text-center">RH</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s, idx) => (
+                  <tr key={s.id} className="hover:bg-pink-50 transition-colors">
+                    <td className="border border-gray-300 text-center py-2">{idx + 1}</td>
+                    <td className="border border-gray-300 px-2 py-2">{s.name}</td>
+                    <td className="border border-gray-300 px-1 py-2 text-center">{s.gender}</td>
+                    <td className="border border-gray-300 px-2 py-2 text-center">
+                      <input type="number" min={0} max={100} value={s.nilai1} onChange={(e) => updateField(s.id, "nilai1", e.target.value)} placeholder="-" className={`${inputCls} py-1.5`} />
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2 text-center">
+                      <input type="number" min={0} max={100} value={s.nilai2} onChange={(e) => updateField(s.id, "nilai2", e.target.value)} placeholder="-" className={`${inputCls} py-1.5`} />
+                    </td>
+                    <td className="border border-gray-300 px-2 py-2 text-center">
+                      <input type="number" min={0} max={100} value={s.nilai3} onChange={(e) => updateField(s.id, "nilai3", e.target.value)} placeholder="-" className={`${inputCls} py-1.5`} />
+                    </td>
+                    <td className="border border-gray-300 py-2 bg-[#fffe03] font-bold text-center text-gray-800">
+                      {hitungRataRata(s) || "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

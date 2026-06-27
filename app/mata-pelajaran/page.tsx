@@ -1,97 +1,146 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Eye, X } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, X, Loader2 } from "lucide-react";
+import { DEFAULT_SUBJECTS } from "@/lib/default-subjects";
 
-const DEFAULT_SUBJECTS = [
-  { id: 1, name: "Pendidikan Agama dan Budi Pekerti", code: "PABP" },
-  { id: 2, name: "Pendidikan Pancasila", code: "PPKn" },
-  { id: 3, name: "Bahasa Indonesia", code: "BIN" },
-  { id: 4, name: "Pendidikan Jasmani, Olah Raga dan Kesehatan", code: "PJOK" },
-  { id: 5, name: "Sejarah", code: "SEJ" },
-  { id: 6, name: "Seni Budaya", code: "SB" },
-  { id: 7, name: "Bahasa dan Sastra Jawa", code: "BSJ" },
-  { id: 8, name: "Matematika", code: "MTK" },
-  { id: 9, name: "Bahasa Inggris", code: "BING" },
-  { id: 10, name: "Informatika", code: "IF" },
-  { id: 11, name: "Projek Ilmu Pengetahuan Alam dan Sosial", code: "PIPS" },
-  { id: 12, name: "Dasar-Dasar Program Keahlian", code: "DDPK" },
-  { id: 13, name: "Konsentrasi Keahlian", code: "KK" },
-  { id: 14, name: "Projek Kreatif dan Kewirausahaan", code: "PKK" },
-  { id: 15, name: "Praktik Kerja Lapangan", code: "PKL" },
-];
+interface Subject {
+  id: string;
+  code: string;
+  name: string;
+}
 
 export default function SubjectsPage() {
-  const [isClient, setIsClient] = useState(false);
-
-  const [subjects, setSubjects] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-subjects');
-      return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
-    }
-    return DEFAULT_SUBJECTS;
-  });
-
-  useEffect(() => {
-    setIsClient(true);
-    const syncData = () => {
-      const savedSubjects = localStorage.getItem('kurikulum-smk-subjects');
-      if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
-    };
-    window.addEventListener('storage', syncData);
-    syncData();
-    return () => window.removeEventListener('storage', syncData);
-  }, []);
-
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-subjects', JSON.stringify(subjects));
-    }
-  }, [subjects, isClient]);
-
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSeedingDefaults, setIsSeedingDefaults] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [formData, setFormData] = useState({
     code: "",
     name: "",
   });
 
-  const handleAddSubject = () => {
-    if (isEditing) {
-      setSubjects(subjects.map((subject: any) =>
-        subject.id === editingId 
-          ? { ...subject, ...formData } 
-          : subject
-      ));
-    } else {
-      const newSubject = {
-        id: subjects.length + 1,
-        ...formData,
-      };
-      setSubjects([...subjects, newSubject]);
+  // Fetch subjects on mount
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
+
+  const fetchSubjects = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/subjects");
+      if (res.ok) {
+        const data = await res.json();
+        setSubjects(data);
+      }
+    } catch (error) {
+      console.error("Error fetching subjects:", error);
+    } finally {
+      setIsLoading(false);
     }
-    resetForm();
   };
 
-  const handleEditSubject = (subject: any) => {
+  const handleAddSubject = async () => {
+    if (!formData.code || !formData.name) {
+      alert("Kode dan nama mata pelajaran wajib diisi");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const method = isEditing ? "PUT" : "POST";
+      const body = isEditing ? { id: editingId, ...formData } : formData;
+      
+      const res = await fetch("/api/subjects", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        await fetchSubjects();
+        setMessage({
+          text: isEditing ? "Mata pelajaran berhasil diperbarui." : "Mata pelajaran berhasil ditambahkan.",
+          type: "success",
+        });
+        resetForm();
+      } else {
+        const error = await res.json();
+        alert(error.error || "Terjadi kesalahan");
+      }
+    } catch (error) {
+      console.error("Error saving subject:", error);
+      alert("Terjadi kesalahan saat menyimpan data");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSeedDefaults = async () => {
+    if (!confirm("Isi daftar mata pelajaran default sesuai kurikulum umum SMK?")) return;
+
+    setIsSeedingDefaults(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaults: true }),
+      });
+
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(result?.error || "Gagal menambahkan data mata pelajaran default.");
+      }
+
+      await fetchSubjects();
+      setMessage({
+        text:
+          result?.createdCount > 0
+            ? `${result.createdCount} dari ${result.totalDefaults} mata pelajaran default berhasil ditambahkan.`
+            : "Semua mata pelajaran default sudah ada.",
+        type: "success",
+      });
+    } catch (error: any) {
+      setMessage({
+        text: error.message || "Gagal menambahkan data mata pelajaran default.",
+        type: "error",
+      });
+    } finally {
+      setIsSeedingDefaults(false);
+    }
+  };
+
+  const handleEditSubject = (subject: Subject) => {
     setEditingId(subject.id);
-    setFormData(subject);
+    setFormData({ code: subject.code, name: subject.name });
     setIsEditing(true);
     setIsDialogOpen(true);
   };
 
-  const handleDeleteSubject = (id: number) => {
-    if (confirm("Apakah Anda yakin ingin menghapus mata pelajaran ini?")) {
-      setSubjects(subjects.filter((subject: any) => subject.id !== id));
+  const handleDeleteSubject = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus mata pelajaran ini?")) return;
+
+    try {
+      const res = await fetch(`/api/subjects?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await fetchSubjects();
+      } else {
+        const error = await res.json();
+        alert(error.error || "Terjadi kesalahan");
+      }
+    } catch (error) {
+      console.error("Error deleting subject:", error);
+      alert("Terjadi kesalahan saat menghapus data");
     }
   };
 
   const resetForm = () => {
-    setFormData({
-      code: "",
-      name: "",
-    });
+    setFormData({ code: "", name: "" });
     setIsEditing(false);
     setEditingId(null);
     setIsDialogOpen(false);
@@ -99,19 +148,45 @@ export default function SubjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Data Mata Pelajaran</h3>
           <p className="text-sm text-gray-500">Kelola daftar mata pelajaran SMK</p>
         </div>
-        <button
-          onClick={() => setIsDialogOpen(true)}
-          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
-        >
-          <Plus size={18} />
-          Tambah Mata Pelajaran
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleSeedDefaults}
+            disabled={isSeedingDefaults}
+            className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSeedingDefaults ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
+            Isi Mapel Default
+          </button>
+          <button
+            onClick={() => setIsDialogOpen(true)}
+            className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
+          >
+            <Plus size={18} />
+            Tambah Mata Pelajaran
+          </button>
+        </div>
       </div>
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        Daftar default berisi {DEFAULT_SUBJECTS.length} mata pelajaran umum SMK sesuai daftar acuan terbaru.
+      </div>
+
+      {message && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            message.type === "success"
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <table className="w-full">
@@ -123,38 +198,52 @@ export default function SubjectsPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {subjects.map((subject: any) => (
-              <tr key={subject.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-gray-600 font-mono">{subject.code}</td>
-                <td className="px-6 py-4">
-                  <span className="font-medium text-gray-800">{subject.name}</span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button 
-                      className="p-2 hover:bg-gray-100 rounded-lg" 
-                      title="Lihat Detail"
-                    >
-                      <Eye size={16} className="text-gray-600" />
-                    </button>
-                    <button 
-                      className="p-2 hover:bg-blue-100 rounded-lg" 
-                      title="Edit"
-                      onClick={() => handleEditSubject(subject)}
-                    >
-                      <Edit size={16} className="text-blue-600" />
-                    </button>
-                    <button 
-                      className="p-2 hover:bg-red-100 rounded-lg" 
-                      title="Hapus"
-                      onClick={() => handleDeleteSubject(subject.id)}
-                    >
-                      <Trash2 size={16} className="text-red-600" />
-                    </button>
-                  </div>
+            {isLoading ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-10 text-center text-gray-500">
+                  <Loader2 size={20} className="animate-spin inline mr-2" /> Memuat data...
                 </td>
               </tr>
-            ))}
+            ) : subjects.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-6 py-10 text-center text-gray-500">
+                  Belum ada data mata pelajaran. Klik "Isi Mapel Default" untuk memuat daftar awal, atau tambahkan manual.
+                </td>
+              </tr>
+            ) : (
+              subjects.map((subject) => (
+                <tr key={subject.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-gray-600 font-mono">{subject.code}</td>
+                  <td className="px-6 py-4">
+                    <span className="font-medium text-gray-800">{subject.name}</span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        className="p-2 hover:bg-gray-100 rounded-lg" 
+                        title="Lihat Detail"
+                      >
+                        <Eye size={16} className="text-gray-600" />
+                      </button>
+                      <button 
+                        className="p-2 hover:bg-blue-100 rounded-lg" 
+                        title="Edit"
+                        onClick={() => handleEditSubject(subject)}
+                      >
+                        <Edit size={16} className="text-blue-600" />
+                      </button>
+                      <button 
+                        className="p-2 hover:bg-red-100 rounded-lg" 
+                        title="Hapus"
+                        onClick={() => handleDeleteSubject(subject.id)}
+                      >
+                        <Trash2 size={16} className="text-red-600" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -166,10 +255,7 @@ export default function SubjectsPage() {
               <h3 className="text-xl font-bold text-gray-800">
                 {isEditing ? "Edit Mata Pelajaran" : "Tambah Mata Pelajaran Baru"}
               </h3>
-              <button
-                onClick={resetForm}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
+              <button onClick={resetForm} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X size={20} className="text-gray-600" />
               </button>
             </div>
@@ -206,8 +292,10 @@ export default function SubjectsPage() {
               </button>
               <button
                 onClick={handleAddSubject}
-                className="flex-1 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+                disabled={isSaving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-60"
               >
+                {isSaving && <Loader2 size={16} className="animate-spin" />}
                 {isEditing ? "Update" : "Simpan"}
               </button>
             </div>

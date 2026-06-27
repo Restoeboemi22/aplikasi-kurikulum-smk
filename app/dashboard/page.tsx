@@ -1,35 +1,130 @@
 "use client";
 
-import { useState } from "react";
-import { BookOpen, FileText, Users, Calendar, CheckCircle, Clock, AlertCircle, RefreshCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  BookOpen,
+  Calendar,
+  CheckCircle,
+  Clock,
+  FileText,
+  Loader2,
+  RefreshCcw,
+  Users,
+} from "lucide-react";
+
+type SummaryResponse = {
+  stats: {
+    curriculumCount: number;
+    journalsToday: number;
+    teacherCount: number;
+    schedulesThisSemester: number;
+  };
+  period: {
+    term: string;
+    academicYear: string;
+  };
+  activities: Array<{
+    id: string;
+    time: string;
+    teacher: string;
+    action: string;
+    subject: string;
+    status: "success" | "pending" | "warning";
+  }>;
+  integrations: Array<{
+    name: string;
+    description: string;
+    status: "success" | "pending" | "warning";
+  }>;
+};
+
+const EMPTY_SUMMARY: SummaryResponse = {
+  stats: {
+    curriculumCount: 0,
+    journalsToday: 0,
+    teacherCount: 0,
+    schedulesThisSemester: 0,
+  },
+  period: {
+    term: "Ganjil",
+    academicYear: "-",
+  },
+  activities: [],
+  integrations: [],
+};
+
+function IntegrationIcon({ status }: { status: "success" | "pending" | "warning" }) {
+  if (status === "success") {
+    return <CheckCircle size={20} className="text-green-600" />;
+  }
+  if (status === "pending") {
+    return <Clock size={20} className="text-yellow-600" />;
+  }
+  return <AlertCircle size={20} className="text-orange-600" />;
+}
 
 export default function Dashboard() {
-  const [isResetting, setIsResetting] = useState(false);
-  
-  const stats = [
-    { label: "Dokumen Kurikulum", value: "24", icon: BookOpen, color: "bg-blue-500" },
-    { label: "Jurnal Hari Ini", value: "18", icon: FileText, color: "bg-green-500" },
-    { label: "Guru Aktif", value: "32", icon: Users, color: "bg-purple-500" },
-    { label: "Jadwal Minggu Ini", value: "128", icon: Calendar, color: "bg-orange-500" },
-  ];
-  
-  const handleResetData = () => {
-    if (confirm("Anda yakin ingin mereset semua data ke default? Semua perubahan akan hilang!")) {
-      setIsResetting(true);
-      // Clear all localStorage items
-      localStorage.clear();
-      // Reload to apply defaults
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
+  const [summary, setSummary] = useState<SummaryResponse>(EMPTY_SUMMARY);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadSummary = async (showFullLoading = false) => {
+    if (showFullLoading) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+
+    setError("");
+
+    try {
+      const response = await fetch("/api/dashboard/summary", { cache: "no-store" });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Gagal memuat ringkasan dashboard.");
+      }
+
+      setSummary(result);
+    } catch (error: any) {
+      setError(error.message || "Gagal memuat ringkasan dashboard.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const recentActivities = [
-    { time: "08:30", teacher: "Pak Budi", action: "Mengisi jurnal mengajar", subject: "Matematika", status: "success" },
-    { time: "09:15", teacher: "Bu Siti", action: "Upload RPP", subject: "Bahasa Indonesia", status: "pending" },
-    { time: "10:00", teacher: "Pak Anton", action: "Mengisi nilai harian", subject: "IPA", status: "success" },
-    { time: "11:30", teacher: "Bu Rina", action: "Mengisi jurnal mengajar", subject: "IPS", status: "warning" },
+  useEffect(() => {
+    loadSummary(true);
+  }, []);
+
+  const stats = [
+    {
+      label: "Dokumen Kurikulum",
+      value: summary.stats.curriculumCount,
+      icon: BookOpen,
+      color: "bg-blue-500",
+    },
+    {
+      label: "Jurnal Hari Ini",
+      value: summary.stats.journalsToday,
+      icon: FileText,
+      color: "bg-green-500",
+    },
+    {
+      label: "Guru Aktif",
+      value: summary.stats.teacherCount,
+      icon: Users,
+      color: "bg-purple-500",
+    },
+    {
+      label: "Jadwal Semester Ini",
+      value: summary.stats.schedulesThisSemester,
+      icon: Calendar,
+      color: "bg-orange-500",
+    },
   ];
 
   return (
@@ -37,19 +132,36 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Dashboard</h3>
-          <p className="text-sm text-gray-500">Ringkasan sistem kurikulum</p>
+          <p className="text-sm text-gray-500">
+            Ringkasan sistem kurikulum untuk {summary.period.term} {summary.period.academicYear}
+          </p>
         </div>
         <button
-          onClick={handleResetData}
-          disabled={isResetting}
-          className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+          onClick={() => loadSummary(false)}
+          disabled={loading || refreshing}
+          className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition disabled:opacity-50"
         >
-          <RefreshCcw size={18} className={isResetting ? "animate-spin" : ""} />
-          {isResetting ? "Mereset..." : "Reset Semua Data"}
+          <RefreshCcw size={18} className={refreshing ? "animate-spin" : ""} />
+          {refreshing ? "Memuat..." : "Muat Ulang"}
         </button>
       </div>
-      
-      {/* Stats Cards */}
+
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="rounded-xl border bg-white px-6 py-12 text-center text-gray-500">
+          <span className="inline-flex items-center gap-2">
+            <Loader2 size={18} className="animate-spin" />
+            Memuat ringkasan dashboard...
+          </span>
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, idx) => {
           const Icon = stat.icon;
@@ -70,12 +182,16 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activities */}
         <div className="bg-white rounded-xl shadow-sm border p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Aktivitas Terbaru</h3>
           <div className="space-y-4">
-            {recentActivities.map((activity, idx) => (
-              <div key={idx} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50">
+            {summary.activities.length === 0 && (
+              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+                Belum ada aktivitas terbaru untuk ditampilkan.
+              </div>
+            )}
+            {summary.activities.map((activity) => (
+              <div key={activity.id} className="flex items-start gap-4 p-3 rounded-lg hover:bg-gray-50">
                 <div className="mt-1">
                   {activity.status === "success" ? (
                     <CheckCircle size={20} className="text-green-500" />
@@ -98,40 +214,42 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Google Workspace Integration */}
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Integrasi Google Workspace</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Status Integrasi Sistem</h3>
           <div className="space-y-4">
-            <div className="flex items-center gap-4 p-4 bg-green-50 rounded-lg border border-green-200">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle size={20} className="text-green-600" />
+            {summary.integrations.length === 0 && (
+              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+                Belum ada status integrasi.
               </div>
-              <div>
-                <p className="font-medium text-green-800">Google Sheets Terhubung</p>
-                <p className="text-sm text-green-600">Sinkronisasi otomatis aktif</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <CheckCircle size={20} className="text-blue-600" />
-              </div>
-              <div>
-                <p className="font-medium text-blue-800">Google Drive Terhubung</p>
-                <p className="text-sm text-blue-600">Dokumen disimpan otomatis</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <CheckCircle size={20} className="text-purple-600" />
-              </div>
-              <div>
-                <p className="font-medium text-purple-800">Google Calendar Terhubung</p>
-                <p className="text-sm text-purple-600">Kalender akademik sinkron</p>
-              </div>
-            </div>
+            )}
+            {summary.integrations.map((integration) => {
+              const colorClass =
+                integration.status === "success"
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : integration.status === "pending"
+                  ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                  : "bg-orange-50 border-orange-200 text-orange-800";
+
+              return (
+                <div
+                  key={integration.name}
+                  className={`flex items-center gap-4 rounded-lg border p-4 ${colorClass}`}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70">
+                    <IntegrationIcon status={integration.status} />
+                  </div>
+                  <div>
+                    <p className="font-medium">{integration.name}</p>
+                    <p className="text-sm opacity-90">{integration.description}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

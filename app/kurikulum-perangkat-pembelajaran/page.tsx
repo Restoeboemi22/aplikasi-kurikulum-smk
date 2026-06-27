@@ -1,40 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Eye, Calendar, FileText, BookOpen, Book, FileCheck, CheckCircle2, Clock, Filter, Upload, Check, X, Activity } from "lucide-react";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Plus, Edit, Trash2, Eye, Calendar, FileText, BookOpen, Book, FileCheck, CheckCircle2, Clock, Filter, Upload, Check, X, Activity, Download } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { canAccessTab, defaultTabFor } from "@/lib/permissions";
-import { getDbSafe, isFirebaseConfigured } from "@/lib/firebase";
+import {
+  getTeacherClassOptions,
+  getTeacherSubjectOptions,
+  resolveCurrentTeacher,
+  type CurrentTeacher,
+} from "@/lib/current-teacher";
+import { getMajorLabel } from "@/lib/curriculum-submissions";
 
 const PAGE_ID = "kurikulum-perangkat-pembelajaran";
-
-// Koleksi data guru (Database > Data Guru) — sumber daftar Nama Guru.
-const TEACHERS_COLLECTION = "teachers_data";
-
-const DEFAULT_CLASSES = [
-  { id: 1, className: "X TKJ 1", majorCode: "TKJ", grade: "X" },
-  { id: 2, className: "X TKJ 2", majorCode: "TKJ", grade: "X" },
-  { id: 3, className: "X TKR 1", majorCode: "TKR", grade: "X" },
-];
-
-const DEFAULT_SUBJECTS = [
-  { id: 1, name: "Pendidikan Agama dan Budi Pekerti", code: "PABP" },
-  { id: 2, name: "Pendidikan Pancasila", code: "PPKn" },
-  { id: 3, name: "Bahasa Indonesia", code: "BIN" },
-  { id: 4, name: "Pendidikan Jasmani, Olah Raga dan Kesehatan", code: "PJOK" },
-  { id: 5, name: "Sejarah", code: "SEJ" },
-  { id: 6, name: "Seni Budaya", code: "SB" },
-  { id: 7, name: "Bahasa dan Sastra Jawa", code: "BSJ" },
-  { id: 8, name: "Matematika", code: "MTK" },
-  { id: 9, name: "Bahasa Inggris", code: "BING" },
-  { id: 10, name: "Informatika", code: "IF" },
-  { id: 11, name: "Projek Ilmu Pengetahuan Alam dan Sosial", code: "PIPS" },
-  { id: 12, name: "Dasar-Dasar Program Keahlian", code: "DDPK" },
-  { id: 13, name: "Konsentrasi Keahlian", code: "KK" },
-  { id: 14, name: "Projek Kreatif dan Kewirausahaan", code: "PKK" },
-  { id: 15, name: "Praktik Kerja Lapangan", code: "PKL" },
-];
 
 const TOOLS = [
   "Kalender Pendidikan",
@@ -45,18 +23,6 @@ const TOOLS = [
   "ATP",
   "KKTP",
   "Modul Ajar"
-];
-
-const DEFAULT_SUBMISSIONS = [
-  { id: 1, teacherName: "Pak Budi Santoso", subject: "Informatika", grade: "X", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", className: "X TKJ 1", tool: "RPE", status: "Sudah", submissionDate: "10 Juni 2024", verifiedBy: "Wakasek Kurikulum" },
-  { id: 2, teacherName: "Bu Siti Aminah", subject: "Matematika", grade: "X", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ", className: "X TKJ 1", tool: "ATP", status: "Sudah", submissionDate: "11 Juni 2024", verifiedBy: "Wakasek Kurikulum" },
-  { id: 3, teacherName: "Pak Anton Wijaya", subject: "Dasar-Dasar Program Keahlian", grade: "X", major: "Teknik Kendaraan Ringan", majorCode: "TKR", className: "X TKR 1", tool: "Modul Ajar", status: "Belum", submissionDate: "-", verifiedBy: "-" },
-];
-
-const DEFAULT_ACTIVITIES = [
-  { id: 1, teacherName: "Pak Budi Santoso", action: "Mengirim RPE", subject: "Informatika", timestamp: "10 Juni 2024, 08:30", type: "submit" },
-  { id: 2, teacherName: "Bu Siti Aminah", action: "Mengirim ATP", subject: "Matematika", timestamp: "11 Juni 2024, 09:15", type: "submit" },
-  { id: 3, teacherName: "Wakasek Kurikulum", action: "Memverifikasi RPE Pak Budi", subject: "Informatika", timestamp: "11 Juni 2024, 10:00", type: "verify" },
 ];
 
 export default function LearningToolsPage() {
@@ -70,10 +36,13 @@ export default function LearningToolsPage() {
   const [selectedMajor, setSelectedMajor] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [isClient, setIsClient] = useState(false);
+  const [currentTeacher, setCurrentTeacher] = useState<CurrentTeacher | null>(null);
+  const [formError, setFormError] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form submission state
   const [formData, setFormData] = useState({
+    teacherId: "",
     teacherName: "",
     subject: "",
     grade: "",
@@ -83,89 +52,109 @@ export default function LearningToolsPage() {
     tool: "RPE",
   });
 
-  // Data from localStorage
-  const [subjects, setSubjects] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-subjects');
-      return saved ? JSON.parse(saved) : DEFAULT_SUBJECTS;
-    }
-    return DEFAULT_SUBJECTS;
-  });
-
-  const [classes, setClasses] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-classes');
-      return saved ? JSON.parse(saved) : DEFAULT_CLASSES;
-    }
-    return DEFAULT_CLASSES;
-  });
-
-  // Daftar guru diambil realtime dari Database > Data Guru (Firestore).
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
 
-  const [submissions, setSubmissions] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-learning-submissions');
-      return saved ? JSON.parse(saved) : DEFAULT_SUBMISSIONS;
-    }
-    return DEFAULT_SUBMISSIONS;
-  });
-
-  const [activities, setActivities] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-learning-activities');
-      return saved ? JSON.parse(saved) : DEFAULT_ACTIVITIES;
-    }
-    return DEFAULT_ACTIVITIES;
-  });
-
-  // Sync all data with localStorage changes
   useEffect(() => {
-    setIsClient(true);
-    const syncData = () => {
-      const savedSubjects = localStorage.getItem('kurikulum-smk-subjects');
-      if (savedSubjects) setSubjects(JSON.parse(savedSubjects));
-      
-      const savedClasses = localStorage.getItem('kurikulum-smk-classes');
-      if (savedClasses) setClasses(JSON.parse(savedClasses));
+    let cancelled = false;
 
-      const savedSubmissions = localStorage.getItem('kurikulum-smk-learning-submissions');
-      if (savedSubmissions) setSubmissions(JSON.parse(savedSubmissions));
-      
-      const savedActivities = localStorage.getItem('kurikulum-smk-learning-activities');
-      if (savedActivities) setActivities(JSON.parse(savedActivities));
-    };
-    window.addEventListener('storage', syncData);
-    syncData();
-    return () => window.removeEventListener('storage', syncData);
-  }, []);
+    const loadMasterOptions = async () => {
+      try {
+        const [subjectsRes, classesRes, teachersRes] = await Promise.all([
+          fetch("/api/subjects", { cache: "no-store" }),
+          fetch("/api/class-majors", { cache: "no-store" }),
+          fetch("/api/teachers", { cache: "no-store" }),
+        ]);
 
-  // Realtime sync daftar guru dari Database > Data Guru (Firestore).
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    const q = query(collection(getDbSafe(), TEACHERS_COLLECTION), orderBy("name"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setTeachers(
-          snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }))
-        );
-      },
-      () => {
-        /* abaikan — dropdown guru sekadar kosong bila gagal memuat */
+        const [subjectsData, classesData, teachersData] = await Promise.all([
+          subjectsRes.json().catch(() => []),
+          classesRes.json().catch(() => []),
+          teachersRes.json().catch(() => []),
+        ]);
+
+        if (!cancelled) {
+          setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+          setClasses(Array.isArray(classesData) ? classesData : []);
+          setTeachers(Array.isArray(teachersData) ? teachersData : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSubjects([]);
+          setClasses([]);
+          setTeachers([]);
+        }
       }
-    );
-    return () => unsub();
+    };
+
+    loadMasterOptions();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const loadSubmissionData = async () => {
+    const response = await fetch("/api/curriculum-submissions?category=learning", { cache: "no-store" });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(result?.error || "Gagal memuat data perangkat pembelajaran.");
+    }
+    setSubmissions(Array.isArray(result?.submissions) ? result.submissions : []);
+    setActivities(Array.isArray(result?.activities) ? result.activities : []);
+  };
+
+  useEffect(() => {
+    loadSubmissionData().catch(() => {
+      setSubmissions([]);
+      setActivities([]);
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentTeacher = async () => {
+      if (role === "ADMIN") {
+        setCurrentTeacher(null);
+        return;
+      }
+
+      try {
+        const teacher = await resolveCurrentTeacher(user);
+        if (!cancelled) {
+          setCurrentTeacher(teacher);
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentTeacher(null);
+        }
+      }
+    };
+
+    loadCurrentTeacher();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role, user]);
 
   // Guru: isi otomatis Nama Guru dengan namanya sendiri di form.
   useEffect(() => {
-    if (role === "TEACHER" && user?.name) {
+    if (role === "TEACHER" && (currentTeacher?.name || user?.name)) {
       setFormData((prev) =>
-        prev.teacherName === user.name ? prev : { ...prev, teacherName: user.name }
+        prev.teacherName === (currentTeacher?.name || user?.name) && prev.teacherId === (currentTeacher?.id || "")
+          ? prev
+          : {
+              ...prev,
+              teacherId: currentTeacher?.id || "",
+              teacherName: currentTeacher?.name || user?.name || "",
+            }
       );
     }
-  }, [role, user?.name]);
+  }, [currentTeacher?.id, currentTeacher?.name, role, user?.name]);
 
   // Pilihan Nama Guru di form:
   // - ADMIN: semua guru terdaftar.
@@ -173,20 +162,103 @@ export default function LearningToolsPage() {
   const formTeacherOptions =
     role === "ADMIN"
       ? teachers
-      : teachers.filter((t: any) => t.name === user?.name);
+      : currentTeacher
+        ? [{ id: currentTeacher.id, name: currentTeacher.name }]
+        : teachers.filter((t: any) => t.name === user?.name);
 
-  // Save data to localStorage whenever it changes
-  useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-learning-submissions', JSON.stringify(submissions));
+  const subjectOptions =
+    role === "ADMIN"
+      ? subjects
+      : getTeacherSubjectOptions(currentTeacher).map((subject, index) => ({
+          id: `teacher-subject-${index}`,
+          name: subject,
+        }));
+  const majorFilterOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          classes
+            .filter((cls: any) => cls?.majorCode)
+            .map((cls: any) => [cls.majorCode, { code: cls.majorCode, label: cls.majorName || getMajorLabel(cls.majorCode) }])
+        ).values()
+      ),
+    [classes]
+  );
+
+  const classOptions = useMemo(() => {
+    if (role === "ADMIN") {
+      return classes.map((cls: any) => ({
+        id: cls.id,
+        value: cls.className,
+        className: cls.className,
+        label: cls.className,
+        grade: cls.grade,
+        majorCode: cls.majorCode,
+        major: cls.majorName || getMajorLabel(cls.majorCode),
+      }));
     }
-  }, [submissions, isClient]);
+    return getTeacherClassOptions(currentTeacher, formData.subject).map((assignment) => ({
+      id: assignment.id,
+      value: assignment.className,
+      className: assignment.className,
+      label: assignment.className,
+      grade: assignment.classLevel,
+      majorCode: assignment.majorCode,
+      major: assignment.majorName || getMajorLabel(assignment.majorCode),
+    }));
+  }, [role, classes, currentTeacher, formData.subject]);
+
+  const availableGrades = useMemo(() => {
+    const grades = classOptions.map((cls: any) => cls.grade).filter(Boolean);
+    return Array.from(new Set(grades)).sort();
+  }, [classOptions]);
+
+  const filteredMajors = useMemo(() => {
+    if (!formData.grade) return [];
+    const matchingOptions = classOptions.filter((cls: any) => cls.grade === formData.grade);
+    const unique = Array.from(
+      new Map(
+        matchingOptions.map((cls: any) => [
+          cls.majorCode,
+          { majorCode: cls.majorCode, major: cls.major },
+        ])
+      ).values()
+    );
+    return unique;
+  }, [classOptions, formData.grade]);
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-learning-activities', JSON.stringify(activities));
-    }
-  }, [activities, isClient]);
+    if (role !== "TEACHER") return;
+
+    const nextSubject = subjectOptions[0]?.name || "";
+    setFormData((prev) =>
+      prev.subject === nextSubject
+        ? prev
+        : { ...prev, subject: nextSubject }
+    );
+  }, [role, subjectOptions]);
+
+  useEffect(() => {
+    if (role !== "TEACHER") return;
+
+    setFormData((prev) => {
+      const curGrade = prev.grade;
+      const curMajorCode = prev.majorCode;
+      if (!curGrade || !curMajorCode) return prev;
+      
+      const stillAllowed = classOptions.some(
+        (cls: any) => cls.grade === curGrade && cls.majorCode === curMajorCode
+      );
+      if (stillAllowed) return prev;
+      return {
+        ...prev,
+        className: "",
+        grade: "",
+        major: "",
+        majorCode: "",
+      };
+    });
+  }, [classOptions, role]);
 
   // Filter submissions
   const filteredSubmissions = submissions.filter((item: any) => {
@@ -232,77 +304,134 @@ export default function LearningToolsPage() {
     }
   };
 
-  const handleSubmitPerangkat = (e: React.FormEvent) => {
+  const handleSubmitPerangkat = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newSubmission = {
-      id: Date.now(),
-      ...formData,
-      status: "Sudah",
-      submissionDate: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }),
-      verifiedBy: "-",
-    };
 
-    // Update submissions
-    setSubmissions((prev: any) => [...prev, newSubmission]);
+    if (!selectedFile) {
+      setFormError("Pilih file perangkat terlebih dahulu.");
+      return;
+    }
 
-    // Add to activity log
-    const newActivity = {
-      id: Date.now(),
-      teacherName: formData.teacherName,
-      action: `Mengirim ${formData.tool}`,
-      subject: formData.subject,
-      timestamp: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      type: "submit"
-    };
+    setFormError("");
+    try {
+      const payload = new FormData();
+      payload.set("teacherId", formData.teacherId);
+      payload.set("teacherName", formData.teacherName);
+      payload.set("subject", formData.subject);
+      payload.set("grade", formData.grade);
+      payload.set("major", formData.major);
+      payload.set("majorCode", formData.majorCode);
+      payload.set("className", formData.className);
+      payload.set("tool", formData.tool);
+      payload.set("file", selectedFile);
 
-    setActivities((prev: any) => [newActivity, ...prev]);
+      const response = await fetch("/api/curriculum-submissions?category=learning", {
+        method: "POST",
+        body: payload,
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error || "Gagal menyimpan perangkat pembelajaran.");
+      }
 
-    // Reset form
-    setFormData({
-      teacherName: "",
-      subject: "",
-      grade: "",
+      await loadSubmissionData();
+      setFormData({
+        teacherId: role === "TEACHER" ? (currentTeacher?.id || "") : "",
+        teacherName: role === "TEACHER" ? (currentTeacher?.name || user?.name || "") : "",
+        subject: role === "TEACHER" ? (subjectOptions[0]?.name || "") : "",
+        grade: "",
+        major: "",
+        majorCode: "",
+        className: "",
+        tool: "RPE",
+      });
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setActiveTab("monitoring");
+    } catch (error: any) {
+      setFormError(error?.message || "Gagal menyimpan perangkat pembelajaran.");
+    }
+  };
+
+  const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+
+    if (!file) {
+      setSelectedFile(null);
+      return;
+    }
+
+    const isAllowed = /\.(pdf|doc|docx)$/i.test(file.name);
+    if (!isAllowed) {
+      setFormError("File harus berformat PDF, DOC, atau DOCX.");
+      e.target.value = "";
+      setSelectedFile(null);
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError("Ukuran file maksimal 10MB.");
+      e.target.value = "";
+      setSelectedFile(null);
+      return;
+    }
+
+    setFormError("");
+    setSelectedFile(file);
+  };
+
+  const handleVerify = async (id: string) => {
+    try {
+      const response = await fetch("/api/curriculum-submissions?category=learning", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          action: "verify",
+        }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error || "Gagal memverifikasi perangkat pembelajaran.");
+      }
+      await loadSubmissionData();
+    } catch (error: any) {
+      setFormError(error?.message || "Gagal memverifikasi perangkat pembelajaran.");
+    }
+  };
+
+  const handleOpenSubmissionFile = (id: string) => {
+    window.open(`/api/curriculum-submissions/${id}/file?disposition=inline`, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDownloadSubmissionFile = (id: string) => {
+    window.location.href = `/api/curriculum-submissions/${id}/file?disposition=attachment`;
+  };
+
+  const handleGradeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextGrade = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      grade: nextGrade,
+      className: "",
       major: "",
       majorCode: "",
-      className: "",
-      tool: "RPE",
-    });
-
-    // Switch to monitoring tab
-    setActiveTab("monitoring");
+    }));
   };
 
-  const handleVerify = (id: number) => {
-    setSubmissions((prev: any) => prev.map((item: any) =>
-      item.id === id ? { ...item, status: "Sudah", verifiedBy: "Wakasek Kurikulum" } : item
-    ));
-
-    const submission = submissions.find((item: any) => item.id === id);
-    if (submission) {
-      const newActivity = {
-        id: Date.now(),
-        teacherName: "Wakasek Kurikulum",
-        action: `Memverifikasi ${submission.tool} ${submission.teacherName}`,
-        subject: submission.subject,
-        timestamp: new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-        type: "verify"
-      };
-      setActivities((prev: any) => [newActivity, ...prev]);
-    }
-  };
-
-  const handleClassChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedClass = classes.find((c: any) => c.className === e.target.value);
-    if (selectedClass) {
-      setFormData(prev => ({
-        ...prev,
-        className: selectedClass.className,
-        grade: selectedClass.grade,
-        major: selectedClass.majorCode === "TKJ" ? "Teknik Komputer dan Jaringan" : "Teknik Kendaraan Ringan",
-        majorCode: selectedClass.majorCode
-      }));
-    }
+  const handleMajorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedMajorCode = e.target.value;
+    const selectedMajorObj = filteredMajors.find((m: any) => m.majorCode === selectedMajorCode);
+    setFormData((prev) => ({
+      ...prev,
+      majorCode: selectedMajorCode,
+      major: selectedMajorObj?.major || "",
+      className: prev.grade && selectedMajorCode ? `${prev.grade} ${selectedMajorCode}` : "",
+    }));
   };
 
   return (
@@ -402,8 +531,9 @@ export default function LearningToolsPage() {
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Semua Jurusan</option>
-                  <option value="TKJ">TKJ</option>
-                  <option value="TKR">TKR</option>
+                  {majorFilterOptions.map((major) => (
+                    <option key={major.code} value={major.code}>{major.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -415,7 +545,7 @@ export default function LearningToolsPage() {
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Semua Guru</option>
-                  {isClient && teachers.map((teacher: any) => (
+                  {teachers.map((teacher: any) => (
                     <option key={teacher.id} value={teacher.name}>{teacher.name}</option>
                   ))}
                 </select>
@@ -429,7 +559,7 @@ export default function LearningToolsPage() {
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">Semua Mata Pelajaran</option>
-                  {isClient && subjects.map((subject: any) => (
+                  {subjects.map((subject: any) => (
                     <option key={subject.id} value={subject.name}>{subject.name}</option>
                   ))}
                 </select>
@@ -489,8 +619,23 @@ export default function LearningToolsPage() {
                     <td className="px-6 py-4 text-gray-600">{item.verifiedBy}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button className="p-2 hover:bg-gray-100 rounded-lg" title="Lihat">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSubmissionFile(item.id)}
+                          disabled={!item.hasStoredFile}
+                          className="p-2 hover:bg-gray-100 rounded-lg disabled:cursor-not-allowed disabled:opacity-40"
+                          title={item.hasStoredFile ? `Lihat ${item.fileName}` : "File belum tersedia"}
+                        >
                           <Eye size={16} className="text-gray-600" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSubmissionFile(item.id)}
+                          disabled={!item.hasStoredFile}
+                          className="p-2 hover:bg-gray-100 rounded-lg disabled:cursor-not-allowed disabled:opacity-40"
+                          title={item.hasStoredFile ? `Download ${item.fileName}` : "File belum tersedia"}
+                        >
+                          <Download size={16} className="text-gray-600" />
                         </button>
                         {item.status !== "Sudah" && (
                           <button 
@@ -523,18 +668,31 @@ export default function LearningToolsPage() {
 
           <div className="bg-white rounded-xl shadow-sm border p-8 max-w-2xl">
             <form onSubmit={handleSubmitPerangkat} className="space-y-6">
+              {formError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {formError}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Nama Guru</label>
                   <select 
                     required
-                    value={formData.teacherName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, teacherName: e.target.value }))}
+                    value={formData.teacherId || ""}
+                    onChange={(e) => {
+                      const selectedTeacher = formTeacherOptions.find((teacher: any) => String(teacher.id) === e.target.value);
+                      setFormData((prev) => ({
+                        ...prev,
+                        teacherId: e.target.value,
+                        teacherName: selectedTeacher?.name || "",
+                      }));
+                    }}
+                    disabled={role === "TEACHER"}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">Pilih Guru</option>
-                    {isClient && formTeacherOptions.map((teacher: any) => (
-                      <option key={teacher.id} value={teacher.name}>{teacher.name}</option>
+                    {formTeacherOptions.map((teacher: any) => (
+                      <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
                     ))}
                   </select>
                 </div>
@@ -545,10 +703,11 @@ export default function LearningToolsPage() {
                     required
                     value={formData.subject}
                     onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
+                    disabled={role === "TEACHER" && subjectOptions.length <= 1}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="">Pilih Mata Pelajaran</option>
-                    {isClient && subjects.map((subject: any) => (
+                    {subjectOptions.map((subject: any) => (
                       <option key={subject.id} value={subject.name}>{subject.name}</option>
                     ))}
                   </select>
@@ -569,16 +728,32 @@ export default function LearningToolsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Kelas</label>
+                  <label className="text-sm font-medium text-gray-700">Tingkat</label>
                   <select 
                     required
-                    value={formData.className}
-                    onChange={handleClassChange}
+                    value={formData.grade}
+                    onChange={handleGradeChange}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
-                    <option value="">Pilih Kelas</option>
-                    {isClient && classes.map((cls: any) => (
-                      <option key={cls.id} value={cls.className}>{cls.className}</option>
+                    <option value="">Pilih Tingkat</option>
+                    {availableGrades.map((grade) => (
+                      <option key={grade} value={grade}>{grade}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Jurusan</label>
+                  <select 
+                    required
+                    value={formData.majorCode}
+                    onChange={handleMajorChange}
+                    disabled={!formData.grade}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:bg-gray-50"
+                  >
+                    <option value="">Pilih Jurusan</option>
+                    {filteredMajors.map((m: any) => (
+                      <option key={m.majorCode} value={m.majorCode}>{m.major}</option>
                     ))}
                   </select>
                 </div>
@@ -586,10 +761,25 @@ export default function LearningToolsPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">File Perangkat</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 transition cursor-pointer">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={handleSelectFile}
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 transition cursor-pointer"
+                >
                   <Upload size={32} className="mx-auto text-gray-400 mb-2" />
                   <p className="text-sm text-gray-500">Klik untuk mengunggah atau seret file ke sini</p>
                   <p className="text-xs text-gray-400 mt-1">PDF, DOCX, DOC (max 10MB)</p>
+                  {selectedFile && (
+                    <p className="mt-3 text-sm font-medium text-primary-700">
+                      File terpilih: {selectedFile.name}
+                    </p>
+                  )}
                 </div>
               </div>
 

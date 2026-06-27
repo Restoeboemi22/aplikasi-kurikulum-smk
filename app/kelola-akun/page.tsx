@@ -2,17 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
-  collection,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-  orderBy,
-  query,
-} from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import {
   UserPlus,
+  Pencil,
   Trash2,
   Shield,
   User as UserIcon,
@@ -20,35 +11,53 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { getDbSafe, withSecondaryAuth, nipToEmail } from "@/lib/firebase";
 import { Role } from "@/lib/permissions";
 import { useAuth } from "@/lib/auth-context";
+
 interface TeacherAccount {
-  uid: string;
+  id: string;
   nip: string;
   name: string;
+  email: string;
   role: Role;
+  teacherId: string | null;
+  teacherCode: string | null;
+  gradeCount: number;
+  journalCount: number;
 }
+
+const EMPTY_FORM = {
+  id: "",
+  nip: "",
+  name: "",
+  email: "",
+  role: "TEACHER" as Role,
+};
 
 export default function ManageAccountsPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<TeacherAccount[]>([]);
   const [loadingList, setLoadingList] = useState(true);
-  const [form, setForm] = useState({ nip: "", name: "", password: "", role: "TEACHER" as Role });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const isEditing = Boolean(form.id);
 
   const loadAccounts = async () => {
     setLoadingList(true);
+    setError("");
     try {
-      const q = query(collection(getDbSafe(), "users"), orderBy("name"));
-      const snap = await getDocs(q);
-      setAccounts(
-        snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<TeacherAccount, "uid">) }))
-      );
-    } catch {
-      setError("Gagal memuat daftar akun.");
+      const response = await fetch("/api/users", { cache: "no-store" });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Gagal memuat daftar akun.");
+      }
+
+      setAccounts(result);
+    } catch (error: any) {
+      setError(error.message || "Gagal memuat daftar akun.");
     } finally {
       setLoadingList(false);
     }
@@ -63,60 +72,95 @@ export default function ManageAccountsPage() {
     setError("");
     setSuccess("");
 
-    if (form.password.length < 6) {
-      setError("Kata sandi minimal 6 karakter.");
-      return;
-    }
-
     setSubmitting(true);
     try {
-      // Buat akun di instance Firebase kedua agar sesi admin tidak ketendang.
-      const newUid = await withSecondaryAuth(async (secondaryAuth) => {
-        const cred = await createUserWithEmailAndPassword(
-          secondaryAuth,
-          nipToEmail(form.nip),
-          form.password
-        );
-        return cred.user.uid;
-      });
-
-      // Simpan profil & role di Firestore.
-      await setDoc(doc(getDbSafe(), "users", newUid), {
+      const payload = {
+        id: form.id,
         nip: form.nip.trim(),
         name: form.name.trim(),
+        email: form.email.trim(),
         role: form.role,
-      });
+      };
 
-      setSuccess(`Akun untuk ${form.name.trim()} berhasil dibuat.`);
-      setForm({ nip: "", name: "", password: "", role: "TEACHER" });
-      await loadAccounts();
-    } catch (err: any) {
-      const code = err?.code ?? "";
-      if (code === "auth/email-already-in-use") {
-        setError("NIP ini sudah terdaftar.");
-      } else if (code === "auth/weak-password") {
-        setError("Kata sandi terlalu lemah (minimal 6 karakter).");
-      } else {
-        setError("Gagal membuat akun. Coba lagi.");
+      const response = await fetch("/api/users", {
+        method: isEditing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        if (response.status === 404 && isEditing) {
+          setForm({ ...EMPTY_FORM });
+          await loadAccounts();
+          throw new Error("Akun yang sedang Anda ubah sudah tidak ada. Daftar akun telah diperbarui.");
+        }
+        throw new Error(result?.error || "Gagal menyimpan akun.");
       }
+
+      setSuccess(
+        isEditing
+          ? `Perubahan akun ${payload.name} berhasil disimpan.`
+          : `Akun ${payload.name} berhasil dibuat.`
+      );
+      setForm({ ...EMPTY_FORM });
+      await loadAccounts();
+    } catch (error: any) {
+      setError(error.message || "Gagal menyimpan akun.");
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleEdit = (account: TeacherAccount) => {
+    setError("");
+    setSuccess("");
+    setForm({
+      id: account.id,
+      nip: account.nip,
+      name: account.name,
+      email: account.email,
+      role: account.role,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setForm({ ...EMPTY_FORM });
+    setError("");
+    setSuccess("");
+  };
+
   const handleDelete = async (acc: TeacherAccount) => {
-    if (acc.uid === user?.uid) return; // jangan hapus diri sendiri
-    if (!window.confirm(`Hapus profil akun ${acc.name}? Tindakan ini menghapus data profil & rolenya.`)) {
+    if (acc.id === user?.uid) return;
+    if (!window.confirm(`Hapus akun ${acc.name}? Tindakan ini hanya menghapus akun aplikasi yang tidak lagi terhubung ke data lain.`)) {
       return;
     }
+
+    setError("");
+    setSuccess("");
+
     try {
-      // Catatan: ini menghapus profil/role di Firestore. Penghapusan kredensial
-      // login (Firebase Auth) tidak bisa dilakukan dari sisi client untuk user lain;
-      // lakukan dari Firebase Console atau Admin SDK bila perlu mencabut login total.
-      await deleteDoc(doc(getDbSafe(), "users", acc.uid));
+      const response = await fetch(`/api/users?id=${acc.id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          if (form.id === acc.id) {
+            setForm({ ...EMPTY_FORM });
+          }
+          await loadAccounts();
+          setSuccess(`Akun ${acc.name} sudah tidak ada. Daftar akun telah diperbarui.`);
+          return;
+        }
+        throw new Error(result?.error || "Gagal menghapus akun.");
+      }
+
+      setSuccess(`Akun ${acc.name} berhasil dihapus.`);
       await loadAccounts();
-    } catch {
-      setError("Gagal menghapus akun.");
+    } catch (error: any) {
+      setError(error.message || "Gagal menghapus akun.");
     }
   };
 
@@ -124,14 +168,13 @@ export default function ManageAccountsPage() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-gray-800">Kelola Akun</h3>
-        <p className="text-sm text-gray-500">Buat dan kelola akun guru beserta hak aksesnya</p>
+        <p className="text-sm text-gray-500">Kelola identitas akun aplikasi dan role yang dibaca server-side</p>
       </div>
 
-      {/* Form buat akun */}
       <div className="bg-white rounded-xl shadow-sm border p-6 max-w-2xl">
         <h4 className="flex items-center gap-2 text-md font-semibold text-gray-800 mb-4">
-          <UserPlus size={18} className="text-primary-600" />
-          Buat Akun Baru
+          {isEditing ? <Pencil size={18} className="text-primary-600" /> : <UserPlus size={18} className="text-primary-600" />}
+          {isEditing ? "Ubah Akun" : "Buat Akun Baru"}
         </h4>
 
         {error && (
@@ -170,14 +213,13 @@ export default function ManageAccountsPage() {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">Kata Sandi Awal</label>
+              <label className="text-sm font-medium text-gray-700">Email Login</label>
               <input
-                type="text"
-                required
-                value={form.password}
-                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="minimal 6 karakter"
+                placeholder="opsional, kosongkan untuk auto-generate"
               />
             </div>
             <div className="space-y-1">
@@ -192,48 +234,79 @@ export default function ManageAccountsPage() {
               </select>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            Role dan profil akun di halaman ini disimpan di database aplikasi. Jika email dikosongkan,
+            sistem akan membuat email internal dari NIP. Jika akun terhubung ke `Data Guru`,
+            perubahan nama/NIP di sini langsung ikut terbaca pada halaman guru.
+          </div>
+          <div className="flex justify-end gap-3">
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Batal
+              </button>
+            )}
             <button
               type="submit"
               disabled={submitting}
               className="flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition disabled:opacity-60"
             >
-              {submitting ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
-              Buat Akun
+              {submitting ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : isEditing ? (
+                <Pencil size={18} />
+              ) : (
+                <UserPlus size={18} />
+              )}
+              {isEditing ? "Simpan Perubahan" : "Buat Akun"}
             </button>
           </div>
         </form>
       </div>
 
-      {/* Daftar akun */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Nama</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">NIP</th>
+              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Email</th>
               <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Hak Akses</th>
+              <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Relasi Data</th>
               <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {loadingList ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                   <Loader2 size={20} className="animate-spin inline mr-2" /> Memuat...
                 </td>
               </tr>
             ) : accounts.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                   Belum ada akun.
                 </td>
               </tr>
             ) : (
               accounts.map((acc) => (
-                <tr key={acc.uid} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-800">{acc.name}</td>
+                <tr key={acc.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 font-medium text-gray-800">
+                    <div className="flex items-center gap-2">
+                      <span>{acc.name}</span>
+                      {acc.id === user?.uid && (
+                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                          Anda
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-gray-600">{acc.nip}</td>
+                  <td className="px-6 py-4 text-gray-600">{acc.email}</td>
                   <td className="px-6 py-4">
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -246,16 +319,31 @@ export default function ManageAccountsPage() {
                       {acc.role === "ADMIN" ? "Admin" : "Guru"}
                     </span>
                   </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {acc.teacherId ? `Guru ${acc.teacherCode || "-"}` : "Belum terhubung ke data guru"}
+                    <div className="text-xs text-gray-400">
+                      {acc.gradeCount} nilai • {acc.journalCount} jurnal
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-right">
-                    {acc.uid !== user?.uid && (
+                    <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => handleDelete(acc)}
-                        className="p-2 hover:bg-red-100 rounded-lg"
-                        title="Hapus"
+                        onClick={() => handleEdit(acc)}
+                        className="p-2 hover:bg-blue-100 rounded-lg"
+                        title="Ubah"
                       >
-                        <Trash2 size={16} className="text-red-600" />
+                        <Pencil size={16} className="text-blue-600" />
                       </button>
-                    )}
+                      {acc.id !== user?.uid && (
+                        <button
+                          onClick={() => handleDelete(acc)}
+                          className="p-2 hover:bg-red-100 rounded-lg"
+                          title="Hapus"
+                        >
+                          <Trash2 size={16} className="text-red-600" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp, deleteApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
+import { NIP_EMAIL_DOMAIN, loginUsernameToEmail, nipToEmail } from "@/lib/user-identity";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -45,13 +46,9 @@ export function getDbSafe(): Firestore {
   return _db;
 }
 
-// Domain sintetis untuk memetakan NIP -> email internal Firebase.
-// Guru hanya mengetik NIP; email ini tidak pernah mereka lihat.
-export const NIP_EMAIL_DOMAIN = "kurikulum-smks-pacet.local";
-
-export function nipToEmail(nip: string): string {
-  return `${nip.trim().toLowerCase()}@${NIP_EMAIL_DOMAIN}`;
-}
+// Domain sintetis untuk memetakan username login -> email internal Firebase.
+// Guru hanya mengetik username; email ini tidak pernah mereka lihat.
+export { NIP_EMAIL_DOMAIN, loginUsernameToEmail, nipToEmail };
 
 /**
  * Membuat akun guru tanpa mengganggu sesi admin yang sedang login.

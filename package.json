@@ -5,11 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "prisma generate && prisma db push && next build",
+    "sync-teacher-logins": "node scripts/sync-teacher-login-usernames.cjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "node scripts/postinstall-prisma.cjs"
   },
   "dependencies": {
     "@prisma/client": "^6",
+    "@vercel/blob": "^2.5.0",
     "clsx": "^2",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",

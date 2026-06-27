@@ -1,224 +1,305 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, RefreshCw, Download, CheckCircle2, AlertCircle, Calendar, Users, Trash2, Clock, Upload, Plus } from "lucide-react";
 import * as XLSX from "xlsx";
+import {
+  AI_SCHEDULE_DAYS as days,
+  AI_SCHEDULE_TIME_SLOTS as timeSlots,
+  DEFAULT_AI_PRIORITIES,
+  DEFAULT_DAY_TIME_SLOTS,
+  getDefaultAcademicYear,
+} from "@/lib/ai-schedule";
 
-const timeSlots = [
-  { no: 1, time: "07.30-08.00" },
-  { no: 2, time: "08.00-08.30" },
-  { no: 3, time: "08.30-09.00" },
-  { no: 4, time: "09.00-09.30" },
-  { no: 5, time: "10.00-10.30" },
-  { no: 6, time: "10.30-11.00" },
-  { no: 7, time: "11.00-11.30" },
-  { no: 8, time: "11.30-12.00" },
-];
+const splitCsv = (value: unknown) =>
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 
-const dayTimeSlots = {
-  "Senin": [1, 2, 3, 4, 5, 6, 7, 8],
-  "Selasa": [1, 2, 3, 4, 5, 6, 7, 8],
-  "Rabu": [1, 2, 3, 4, 5, 6, 7, 8],
-  "Kamis": [1, 2, 3, 4, 5, 6, 7, 8],
-  "Jumat": [1, 2, 3, 4, 5, 6],
-  "Sabtu": [1, 2, 3, 4, 5]
-};
-
-const days = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
-const DEFAULT_CLASSES = [
-  { id: 1, className: "X TKJ 1", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ" },
-  { id: 2, className: "X TKJ 2", major: "Teknik Komputer dan Jaringan", majorCode: "TKJ" },
-  { id: 3, className: "X TKR 1", major: "Teknik Kendaraan Ringan", majorCode: "TKR" },
-];
-
-const DEFAULT_MASTER_TEACHERS = [
-  {
-    id: 1,
-    kodeGuru: "GRU001",
-    tanggalLahir: "1985-01-01",
-    name: "Pak Budi Santoso",
-    mataPelajaran: "Informatika",
-    tingkatKelas: ["X"],
-    jurusan: ["TKJ"],
-    jenisKelamin: "Laki-laki"
-  },
-  {
-    id: 2,
-    kodeGuru: "GRU002",
-    tanggalLahir: "1988-05-15",
-    name: "Bu Siti Aminah",
-    mataPelajaran: "Matematika",
-    tingkatKelas: ["X", "XI"],
-    jurusan: ["TKJ", "TKR"],
-    jenisKelamin: "Perempuan"
-  },
-];
-
-const DEFAULT_SCHEDULE_TEACHERS = [
-  {
-    id: 1,
-    teacherId: 1,
-    name: "Pak Budi Santoso",
-    mataPelajaran: "Informatika",
-    tingkatKelas: ["X"],
-    jurusan: ["TKJ"],
-    requestDay: "Senin",
-    jamKe: [1, 2]
-  },
-  {
-    id: 2,
-    teacherId: 2,
-    name: "Bu Siti Aminah",
-    mataPelajaran: "Matematika",
-    tingkatKelas: ["X", "XI"],
-    jurusan: ["TKJ", "TKR"],
-    requestDay: "Rabu",
-    jamKe: [3, 4]
-  },
-];
-
-
-
-const DEFAULT_SUBJECTS_ARRAY = [
-  "Pendidikan Agama dan Budi Pekerti",
-  "Pendidikan Pancasila",
-  "Bahasa Indonesia",
-  "Pendidikan Jasmani, Olah Raga dan Kesehatan",
-  "Sejarah",
-  "Seni Budaya",
-  "Bahasa dan Sastra Jawa",
-  "Matematika",
-  "Bahasa Inggris",
-  "Informatika",
-  "Projek Ilmu Pengetahuan Alam dan Sosial",
-  "Dasar-Dasar Program Keahlian",
-  "Konsentrasi Keahlian",
-  "Projek Kreatif dan Kewirausahaan",
-  "Praktik Kerja Lapangan",
-];
+const uniqueValues = (items: string[]) => Array.from(new Set(items.filter(Boolean)));
 
 export default function AISchedulePage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
-
-  const [isClient, setIsClient] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
   
-  // Load subjects from Data Mata Pelajaran page
-  const [subjectsList, setSubjectsList] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-subjects');
-      if (saved) {
-        return JSON.parse(saved).map((s: any) => s.name);
-      }
-      return DEFAULT_SUBJECTS_ARRAY;
-    }
-    return DEFAULT_SUBJECTS_ARRAY;
-  });
-
-  // Sync all data with localStorage changes
-  useEffect(() => {
-    setIsClient(true);
-    const syncData = () => {
-      // Sync subjects
-      const savedSubjects = localStorage.getItem('kurikulum-smk-subjects');
-      if (savedSubjects) {
-        setSubjectsList(JSON.parse(savedSubjects).map((s: any) => s.name));
-      } else {
-        setSubjectsList(DEFAULT_SUBJECTS_ARRAY);
-      }
-      
-      // Sync classes
-      const savedClasses = localStorage.getItem('kurikulum-smk-classes');
-      if (savedClasses) setClasses(JSON.parse(savedClasses));
-      
-      // Sync master teachers
-      const savedTeachers = localStorage.getItem('kurikulum-smk-teachers');
-      if (savedTeachers) setMasterTeachers(JSON.parse(savedTeachers));
-    };
-    window.addEventListener('storage', syncData);
-    syncData();
-    return () => window.removeEventListener('storage', syncData);
-  }, []);
+  const [subjectsList, setSubjectsList] = useState<string[]>([]);
   
-  // Load classes from localStorage
-  const [classes, setClasses] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-classes');
-      return saved ? JSON.parse(saved) : DEFAULT_CLASSES;
-    }
-    return DEFAULT_CLASSES;
-  });
+  const [classes, setClasses] = useState<any[]>([]);
+  const [masterTeachers, setMasterTeachers] = useState<any[]>([]);
+  const majorOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          classes
+            .filter((item: any) => item?.majorCode)
+            .map((item: any) => [
+              String(item.majorCode).trim(),
+              {
+                code: String(item.majorCode).trim(),
+                label: String(item.majorName || item.majorCode).trim(),
+              },
+            ])
+        ).values()
+      ),
+    [classes]
+  );
+  const majorLabelByCode = useMemo(
+    () =>
+      new Map(
+        majorOptions.map((option: { code: string; label: string }) => [option.code.toLowerCase(), option.label])
+      ),
+    [majorOptions]
+  );
+  const majorCodeByLabel = useMemo(
+    () =>
+      new Map(
+        majorOptions.flatMap((option: { code: string; label: string }) => [
+          [option.code.toLowerCase(), option.code],
+          [option.label.toLowerCase(), option.code],
+        ])
+      ),
+    [majorOptions]
+  );
+  const scheduleClassColumns = useMemo(
+    () =>
+      [...classes]
+        .filter((item: any) => item?.className && item?.grade && item?.majorCode)
+        .sort((a: any, b: any) => {
+          const gradeOrder = ["X", "XI", "XII"];
+          const gradeDiff = gradeOrder.indexOf(a.grade) - gradeOrder.indexOf(b.grade);
+          if (gradeDiff !== 0) return gradeDiff;
+          return String(a.className).localeCompare(String(b.className), "id");
+        }),
+    [classes]
+  );
+  const classColumnsByGrade = useMemo(
+    () =>
+      ["X", "XI", "XII"].map((grade) => ({
+        grade,
+        items: scheduleClassColumns.filter((item: any) => item.grade === grade),
+      })),
+    [scheduleClassColumns]
+  );
 
-  // Load master teachers from Data Guru page
-  const [masterTeachers, setMasterTeachers] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-teachers');
-      return saved ? JSON.parse(saved) : DEFAULT_MASTER_TEACHERS;
-    }
-    return DEFAULT_MASTER_TEACHERS;
-  });
+  const normalizeJurusanValues = (values: unknown) =>
+    uniqueValues(
+      (Array.isArray(values) ? values : splitCsv(values))
+        .map((item) => String(item).trim())
+        .map((item) => majorCodeByLabel.get(item.toLowerCase()) || item)
+    );
 
-  // Load schedule teachers (template for AI) from localStorage
-  const [scheduleTeachers, setScheduleTeachers] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-schedule-teachers');
-      return saved ? JSON.parse(saved) : DEFAULT_SCHEDULE_TEACHERS;
-    }
-    return DEFAULT_SCHEDULE_TEACHERS;
-  });
+  const getMajorLabel = (code: string) => majorLabelByCode.get(String(code).toLowerCase()) || code;
+  const getClassColumnLabel = (classItem: any) =>
+    String(classItem.className || "")
+      .replace(new RegExp(`^${String(classItem.grade || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+`), "")
+      .trim() || String(classItem.className || "");
+  const getGradeHeaderClass = (grade: string) =>
+    grade === "X" ? "bg-blue-100" : grade === "XI" ? "bg-green-100" : "bg-yellow-100";
+  const getGradeCellClass = (grade: string) =>
+    grade === "X" ? "bg-blue-50" : grade === "XI" ? "bg-green-50" : "bg-yellow-50";
+
+  const [academicYear, setAcademicYear] = useState(getDefaultAcademicYear());
+  const [semester, setSemester] = useState("Ganjil");
+  const [scheduleTeachers, setScheduleTeachers] = useState<any[]>([]);
 
   const [generated, setGenerated] = useState(false);
-  const [editableDayTimeSlots, setEditableDayTimeSlots] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-day-time-slots');
-      return saved ? JSON.parse(saved) : dayTimeSlots;
-    }
-    return dayTimeSlots;
-  });
+  const [editableDayTimeSlots, setEditableDayTimeSlots] = useState(DEFAULT_DAY_TIME_SLOTS);
+  const [religiousRestrictions, setReligiousRestrictions] = useState<any[]>([]);
+  const [priorities, setPriorities] = useState(DEFAULT_AI_PRIORITIES);
 
-  // Restrictions for religious activities
-  const [religiousRestrictions, setReligiousRestrictions] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('kurikulum-smk-religious-restrictions');
-      return saved ? JSON.parse(saved) : [];
-    }
-    return [];
-  });
+  const findMasterTeacher = (teacherRef: any) => {
+    const teacherId = String(teacherRef?.teacherId || "").trim();
+    const teacherName = String(teacherRef?.name || "").trim().toLowerCase();
+    const teacherCode = String(teacherRef?.kodeGuru || "").trim().toLowerCase();
+
+    return (
+      masterTeachers.find((teacher: any) => String(teacher.id) === teacherId) ||
+      masterTeachers.find((teacher: any) => String(teacher.name || "").trim().toLowerCase() === teacherName) ||
+      masterTeachers.find((teacher: any) => String(teacher.kodeGuru || "").trim().toLowerCase() === teacherCode) ||
+      null
+    );
+  };
+
+  const normalizeScheduleTeacher = (teacher: any, index = 0) => {
+    const matchedTeacher = findMasterTeacher(teacher);
+
+    const rawAssignments = Array.isArray(matchedTeacher?.teachingAssignments)
+      ? matchedTeacher.teachingAssignments
+      : [];
+    const assignmentSubjects = uniqueValues(
+      rawAssignments.map((assignment: any) => String(assignment.subject || "").trim()).filter(Boolean)
+    );
+    const assignmentLevels = uniqueValues(
+      rawAssignments.map((assignment: any) => String(assignment.classLevel || "").trim()).filter(Boolean)
+    );
+    const assignmentMajors = uniqueValues(
+      rawAssignments.map((assignment: any) => String(assignment.majorCode || "").trim()).filter(Boolean)
+    );
+
+    const fallbackSubjects = Array.isArray(matchedTeacher?.mataPelajaran)
+      ? matchedTeacher.mataPelajaran.map((item: string) => item.trim()).filter(Boolean)
+      : splitCsv(matchedTeacher?.mataPelajaran || teacher?.mataPelajaran);
+    const fallbackLevels = Array.isArray(matchedTeacher?.tingkatKelas)
+      ? matchedTeacher.tingkatKelas.map((item: string) => item.trim()).filter(Boolean)
+      : splitCsv(matchedTeacher?.tingkatKelas || teacher?.tingkatKelas);
+    const fallbackMajors = Array.isArray(matchedTeacher?.jurusan)
+      ? matchedTeacher.jurusan.map((item: string) => item.trim()).filter(Boolean)
+      : splitCsv(matchedTeacher?.jurusan || teacher?.jurusan);
+
+    return {
+      id: teacher?.id ?? Date.now() + index,
+      teacherId: matchedTeacher ? String(matchedTeacher.id) : String(teacher?.teacherId || ""),
+      name: matchedTeacher?.name || teacher?.name || "",
+      kodeGuru: matchedTeacher?.kodeGuru || teacher?.kodeGuru || "",
+      mataPelajaran:
+        teacher?.mataPelajaran ||
+        assignmentSubjects[0] ||
+        fallbackSubjects[0] ||
+        "",
+      tingkatKelas: uniqueValues(
+        Array.isArray(teacher?.tingkatKelas) && teacher.tingkatKelas.length > 0
+          ? teacher.tingkatKelas.map((item: string) => String(item).trim()).filter(Boolean)
+          : assignmentLevels.length > 0
+          ? assignmentLevels
+          : fallbackLevels
+      ),
+      jurusan: uniqueValues(
+        Array.isArray(teacher?.jurusan) && teacher.jurusan.length > 0
+          ? normalizeJurusanValues(teacher.jurusan)
+          : assignmentMajors.length > 0
+          ? assignmentMajors
+          : normalizeJurusanValues(fallbackMajors)
+      ),
+      requestDay: teacher?.requestDay || "Senin",
+      jamKe: Array.isArray(teacher?.jamKe)
+        ? teacher.jamKe.map((item: any) => Number(item)).filter((item: number) => !Number.isNaN(item))
+        : [],
+    };
+  };
 
   // State for new restriction form
   const [newRestriction, setNewRestriction] = useState({
     day: 'Senin',
     jamKe: [1, 2],
     tingkat: ['X'],
-    jurusan: ['TKR'],
+    jurusan: [] as string[],
     keterangan: 'Kegiatan Keagamaan'
   });
 
-  // Save to localStorage whenever data changes (only when client is ready)
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-schedule-teachers', JSON.stringify(scheduleTeachers));
-    }
-  }, [scheduleTeachers, isClient]);
+    let cancelled = false;
+
+    const loadMasterData = async () => {
+      try {
+        const [subjectsRes, classesRes, teachersRes, configRes] = await Promise.all([
+          fetch("/api/subjects", { cache: "no-store" }),
+          fetch("/api/class-majors", { cache: "no-store" }),
+          fetch("/api/teachers", { cache: "no-store" }),
+          fetch("/api/ai-schedule-config", { cache: "no-store" }),
+        ]);
+
+        const [subjectsData, classesData, teachersData, configData] = await Promise.all([
+          subjectsRes.json().catch(() => []),
+          classesRes.json().catch(() => []),
+          teachersRes.json().catch(() => []),
+          configRes.json().catch(() => null),
+        ]);
+
+        if (!cancelled) {
+          setSubjectsList(
+            Array.isArray(subjectsData) ? subjectsData.map((subject: any) => subject.name).filter(Boolean) : []
+          );
+          setClasses(Array.isArray(classesData) ? classesData : []);
+          setMasterTeachers(Array.isArray(teachersData) ? teachersData : []);
+          setAcademicYear(String(configData?.academicYear || getDefaultAcademicYear()));
+          setSemester(String(configData?.semester || "Ganjil"));
+          setScheduleTeachers(Array.isArray(configData?.scheduleTeachers) ? configData.scheduleTeachers : []);
+          setEditableDayTimeSlots(configData?.editableDayTimeSlots || DEFAULT_DAY_TIME_SLOTS);
+          setReligiousRestrictions(Array.isArray(configData?.religiousRestrictions) ? configData.religiousRestrictions : []);
+          setPriorities(configData?.priorities || DEFAULT_AI_PRIORITIES);
+          setConfigLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setSubjectsList([]);
+          setClasses([]);
+          setMasterTeachers([]);
+          setAcademicYear(getDefaultAcademicYear());
+          setSemester("Ganjil");
+          setScheduleTeachers([]);
+          setEditableDayTimeSlots(DEFAULT_DAY_TIME_SLOTS);
+          setReligiousRestrictions([]);
+          setPriorities(DEFAULT_AI_PRIORITIES);
+          setConfigLoaded(true);
+        }
+      }
+    };
+
+    loadMasterData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-classes', JSON.stringify(classes));
-    }
-  }, [classes, isClient]);
+    if (!configLoaded) return;
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        await fetch("/api/ai-schedule-config", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            academicYear,
+            semester,
+            scheduleTeachers,
+            editableDayTimeSlots,
+            religiousRestrictions,
+            priorities,
+          }),
+        });
+      } catch (error) {
+        console.error("Gagal menyimpan konfigurasi Jadwal AI:", error);
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    academicYear,
+    semester,
+    scheduleTeachers,
+    editableDayTimeSlots,
+    religiousRestrictions,
+    priorities,
+    configLoaded,
+  ]);
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-day-time-slots', JSON.stringify(editableDayTimeSlots));
-    }
-  }, [editableDayTimeSlots, isClient]);
+    if (masterTeachers.length === 0 && classes.length === 0) return;
+
+    setScheduleTeachers((prev: any[]) =>
+      prev.map((teacher, index) => normalizeScheduleTeacher(teacher, index))
+    );
+  }, [masterTeachers, classes]);
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem('kurikulum-smk-religious-restrictions', JSON.stringify(religiousRestrictions));
-    }
-  }, [religiousRestrictions, isClient]);
+    if (majorOptions.length === 0) return;
+
+    setNewRestriction((prev) => {
+      const filteredJurusan = prev.jurusan.filter((jurusan) =>
+        majorOptions.some((option: { code: string }) => option.code === jurusan)
+      );
+      if (filteredJurusan.length > 0) {
+        return { ...prev, jurusan: filteredJurusan };
+      }
+      return { ...prev, jurusan: [majorOptions[0].code] };
+    });
+  }, [majorOptions]);
 
   const addRestriction = () => {
     if (newRestriction.jamKe.length === 0 || newRestriction.tingkat.length === 0 || newRestriction.jurusan.length === 0) {
@@ -226,16 +307,18 @@ export default function AISchedulePage() {
       return;
     }
     
-    // Generate all combinations of kelas
-    const kelasList: string[] = [];
-    newRestriction.tingkat.forEach(tingkat => {
-      newRestriction.jurusan.forEach(jurusan => {
-        // Add all kelas ke- for this combination
-        ['1', '2', '3'].forEach(ke => {
-          kelasList.push(`${tingkat} ${jurusan} ${ke}`);
-        });
-      });
-    });
+    const kelasList = scheduleClassColumns
+      .filter(
+        (item: any) =>
+          newRestriction.tingkat.includes(String(item.grade)) &&
+          newRestriction.jurusan.includes(String(item.majorCode))
+      )
+      .map((item: any) => String(item.className));
+
+    if (kelasList.length === 0) {
+      alert("Belum ada kombinasi kelas yang cocok di menu Kelas-Jurusan.");
+      return;
+    }
     
     setReligiousRestrictions([
       ...religiousRestrictions,
@@ -269,27 +352,27 @@ export default function AISchedulePage() {
     });
   };
 
-  // Fungsi untuk mendapatkan jadwal pelajaran berdasarkan hari, jam, kelas, jurusan
-  const getJadwal = (day: string, slotNo: number, tingkat: string, jurusan: string, kelasKe: number) => {
-    // Generate kelas name for checking
-    const kelasName = `${tingkat} ${jurusan} ${kelasKe}`;
-    
-    // Check religious restrictions first
+  const getScheduleCellData = (day: string, slotNo: number, classItem: any) => {
+    const kelasName = String(classItem.className);
+    const tingkat = String(classItem.grade);
+    const jurusan = String(classItem.majorCode);
+
     const restriction = religiousRestrictions.find((r: any) =>
       r.day === day && 
       r.jamKe.includes(slotNo) && 
       r.kelas.includes(kelasName)
     );
     if (restriction) {
-      return <strong className="text-purple-700">{restriction.keterangan}</strong>;
+      return {
+        type: "restriction",
+        label: String(restriction.keterangan),
+      };
     }
     
-    // Check untuk istirahat atau kegiatan khusus
-    if (slotNo === 4) return <strong>ISTIRAHAT</strong>;
-    if (slotNo === 5) return <strong>DHUHA PRAYER</strong>;
-    if (day === "Senin" && slotNo === 1) return <strong>MORNING PARADE</strong>;
+    if (slotNo === 4) return { type: "special", label: "ISTIRAHAT" };
+    if (slotNo === 5) return { type: "special", label: "DHUHA PRAYER" };
+    if (day === "Senin" && slotNo === 1) return { type: "special", label: "MORNING PARADE" };
 
-    // Cari guru yang mengajar pada hari dan jam tersebut
     const guruMengajar = scheduleTeachers.find((teacher: any) =>
       teacher.requestDay === day && 
       teacher.jamKe?.includes(slotNo) &&
@@ -299,17 +382,35 @@ export default function AISchedulePage() {
 
     if (guruMengajar) {
       const guruData = masterTeachers.find((mt: any) => mt.id === guruMengajar.teacherId);
+      return {
+        type: "teacher",
+        kodeGuru: String(guruData?.kodeGuru || guruMengajar.teacherId || "-"),
+        mataPelajaran: String(guruMengajar.mataPelajaran || ""),
+        label: `${guruData?.kodeGuru || guruMengajar.teacherId} - ${guruMengajar.mataPelajaran || ""}`,
+      };
+    }
+
+    return { type: "empty", label: "-" };
+  };
+
+  const getJadwal = (day: string, slotNo: number, classItem: any) => {
+    const cell = getScheduleCellData(day, slotNo, classItem);
+    if (cell.type === "restriction") {
+      return <strong className="text-purple-700">{cell.label}</strong>;
+    }
+    if (cell.type === "special") {
+      return <strong>{cell.label}</strong>;
+    }
+    if (cell.type === "teacher") {
       return (
         <>
-          <div className="font-semibold text-blue-700">{guruData?.kodeGuru || guruMengajar.teacherId}</div>
-          <div className="text-gray-600">{guruMengajar.mataPelajaran}</div>
+          <div className="font-semibold text-blue-700">{cell.kodeGuru}</div>
+          <div className="text-gray-600">{cell.mataPelajaran}</div>
         </>
       );
     }
 
-    // Jika tidak ada guru yang diassign, tampilkan angka acak seperti contoh
-    const angkaAcak = ((slotNo * 3 + kelasKe + day.length) % 30) + 1;
-    return <span className="text-gray-400">{angkaAcak}</span>;
+    return <span className="text-gray-400">-</span>;
   };
   
   const steps = [
@@ -324,16 +425,23 @@ export default function AISchedulePage() {
     if (masterTeachers.length === 0) return;
     const newId = scheduleTeachers.length > 0 ? Math.max(...scheduleTeachers.map((t: any) => t.id)) + 1 : 1;
     const firstMasterTeacher = masterTeachers[0];
-    setScheduleTeachers([...scheduleTeachers, { 
-      id: newId,
-      teacherId: firstMasterTeacher.id,
-      name: firstMasterTeacher.name,
-      mataPelajaran: firstMasterTeacher.mataPelajaran,
-      tingkatKelas: [...(firstMasterTeacher.tingkatKelas || [])],
-      jurusan: [...(firstMasterTeacher.jurusan || [])],
-      requestDay: "Senin",
-      jamKe: []
-    }]);
+    setScheduleTeachers([
+      ...scheduleTeachers,
+      normalizeScheduleTeacher(
+        {
+          id: newId,
+          teacherId: String(firstMasterTeacher.id),
+          name: firstMasterTeacher.name,
+          kodeGuru: firstMasterTeacher.kodeGuru,
+          mataPelajaran: firstMasterTeacher.mataPelajaran,
+          tingkatKelas: [...(firstMasterTeacher.tingkatKelas || [])],
+          jurusan: [...(firstMasterTeacher.jurusan || [])],
+          requestDay: "Senin",
+          jamKe: [],
+        },
+        newId
+      ),
+    ]);
   };
 
   const removeTeacherFromSchedule = (id: any) => {
@@ -344,19 +452,20 @@ export default function AISchedulePage() {
     setScheduleTeachers(scheduleTeachers.map((t: any) => {
       if (t.id !== id) return t;
       if (field === 'teacherId') {
-        const selectedTeacher = masterTeachers.find((mt: any) => mt.id === value);
+        const selectedTeacher = masterTeachers.find((mt: any) => String(mt.id) === String(value));
         if (selectedTeacher) {
-          return {
+          return normalizeScheduleTeacher({
             ...t,
-            teacherId: value,
+            teacherId: String(value),
             name: selectedTeacher.name,
+            kodeGuru: selectedTeacher.kodeGuru,
             mataPelajaran: selectedTeacher.mataPelajaran,
             tingkatKelas: [...(selectedTeacher.tingkatKelas || [])],
             jurusan: [...(selectedTeacher.jurusan || [])]
-          };
+          });
         }
       }
-      return { ...t, [field]: value };
+      return normalizeScheduleTeacher({ ...t, [field]: value });
     }));
   };
 
@@ -425,7 +534,7 @@ export default function AISchedulePage() {
         "Nama Guru": guruData.name,
         "Mata Pelajaran": teacher.mataPelajaran,
         "Tingkat Kelas": teacher.tingkatKelas?.join(", ") || "",
-        "Jurusan": teacher.jurusan?.join(", ") || "",
+        "Jurusan": teacher.jurusan?.map((jurusan: string) => getMajorLabel(jurusan)).join(", ") || "",
         "Request Hari": teacher.requestDay,
         "Jam Ke-": teacher.jamKe?.join(", ") || ""
       };
@@ -450,18 +559,21 @@ export default function AISchedulePage() {
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
       const importedTeachers = jsonData.map((row: any, index: any) => {
-        const matchingTeacher = masterTeachers.find((mt: any) => mt.name === row["Nama Guru"]);
+        const matchingTeacher =
+          masterTeachers.find((mt: any) => String(mt.name || "").trim() === String(row["Nama Guru"] || "").trim()) ||
+          masterTeachers.find((mt: any) => String(mt.kodeGuru || "").trim() === String(row["Kode Guru"] || "").trim());
 
-        return {
+        return normalizeScheduleTeacher({
           id: Date.now() + index,
-          teacherId: matchingTeacher?.id || null,
+          teacherId: matchingTeacher ? String(matchingTeacher.id) : "",
           name: row["Nama Guru"] || "",
+          kodeGuru: row["Kode Guru"] || matchingTeacher?.kodeGuru || "",
           mataPelajaran: row["Mata Pelajaran"] || "",
           tingkatKelas: row["Tingkat Kelas"]?.split(", ")?.filter((t: any) => t) || [],
-          jurusan: row["Jurusan"]?.split(", ")?.filter((j: any) => j) || [],
+          jurusan: normalizeJurusanValues(row["Jurusan"]?.split(", ")?.filter((j: any) => j) || []),
           requestDay: row["Request Hari"] || "Senin",
           jamKe: row["Jam Ke-"]?.split(", ")?.map((j: any) => parseInt(j.trim()))?.filter((j: any) => !isNaN(j)) || []
-        };
+        }, index);
       }).filter((t: any) => t.name);
 
       setScheduleTeachers([...scheduleTeachers, ...importedTeachers]);
@@ -472,31 +584,27 @@ export default function AISchedulePage() {
   const exportJadwal = async () => {
     try {
       const wb = XLSX.utils.book_new();
-      const jadwalData = [];
+      const jadwalData: any[] = [];
+      const headerRow = ["HARI", "WAKTU", "JAM KE-"];
+      classColumnsByGrade.forEach(({ grade, items }) => {
+        if (items.length === 0) return;
+        items.forEach((item, index) => {
+          headerRow.push(index === 0 ? grade : "");
+        });
+      });
+      headerRow.push("PIKET");
 
-      // Header baris 1
-      jadwalData.push(['JADWAL PELAJARAN SMK PACET Tp. 2025 / 2026']);
+      const classHeaderRow = ["", "", ""];
+      scheduleClassColumns.forEach((item: any) => {
+        classHeaderRow.push(getClassColumnLabel(item));
+      });
+      classHeaderRow.push("");
+
+      jadwalData.push([`JADWAL PELAJARAN SMK PACET Tp. ${academicYear}`]);
       jadwalData.push([]);
+      jadwalData.push(headerRow);
+      jadwalData.push(classHeaderRow);
 
-      // Header baris 2 - Kolom utama
-      jadwalData.push([
-        'HARI', 'WAKTU', 'JAM KE-',
-        'X', '', '',
-        'XI', '', '',
-        'XII', '', '',
-        'PIKET'
-      ]);
-
-      // Header baris 3 - Kolom kelas
-      jadwalData.push([
-        '', '', '',
-        'TKR 1', 'TKR 2', 'TKR 3',
-        'TKR 1', 'TKR 2', 'TKR 3',
-        'TKR 1', 'TKR 2', 'TKR 3',
-        ''
-      ]);
-
-      // Isi jadwal
       days.forEach((day, dayIndex) => {
         const availableSlots = editableDayTimeSlots[day] || [];
         const guruPiket = masterTeachers[dayIndex % masterTeachers.length];
@@ -508,49 +616,14 @@ export default function AISchedulePage() {
           const isDhuhaprayer = slotNo === 5;
           const isMorningparade = day === "Senin" && slotNo === 1;
 
-          const getCellContent = (tingkat: string, jurusan: string, kelasKe: number) => {
-            const kelasName = `${tingkat} ${jurusan} ${kelasKe}`;
-            
-            // Check religious restrictions
-            const restriction = religiousRestrictions.find((r: any) =>
-              r.day === day && 
-              r.jamKe.includes(slotNo) && 
-              r.kelas.includes(kelasName)
-            );
-            if (restriction) return restriction.keterangan;
-            
-            if (isIstirahat) return "ISTIRAHAT";
-            if (isDhuhaprayer) return "DHUHA PRAYER";
-            if (isMorningparade) return "MORNING PARADE";
-
-            const guruMengajar = scheduleTeachers.find((teacher: any) =>
-              teacher.requestDay === day && 
-              teacher.jamKe?.includes(slotNo) &&
-              teacher.tingkatKelas?.includes(tingkat) &&
-              teacher.jurusan?.includes(jurusan)
-            );
-
-            if (guruMengajar) {
-              const guruData = masterTeachers.find((mt: any) => mt.id === guruMengajar.teacherId);
-              return `${guruData?.kodeGuru || guruMengajar.teacherId} - ${guruMengajar.mataPelajaran}`;
-            }
-            
-            return ((slotNo * 3 + kelasKe + day.length) % 30) + 1;
-          };
-
           const row = [
             isFirst ? day.toUpperCase() : "",
             slot?.time || "",
             slotNo,
-            getCellContent("X", "TKR", 1),
-            getCellContent("X", "TKR", 2),
-            getCellContent("X", "TKR", 3),
-            getCellContent("XI", "TKR", 1),
-            getCellContent("XI", "TKR", 2),
-            getCellContent("XI", "TKR", 3),
-            getCellContent("XII", "TKR", 1),
-            getCellContent("XII", "TKR", 2),
-            getCellContent("XII", "TKR", 3),
+            ...scheduleClassColumns.map((classItem: any) => {
+              const content = getScheduleCellData(day, slotNo, classItem);
+              return content.label;
+            }),
             isFirst ? `${guruPiket?.name} (${guruPiket?.kodeGuru})` : ""
           ];
           jadwalData.push(row);
@@ -559,20 +632,19 @@ export default function AISchedulePage() {
         jadwalData.push([]);
       });
 
-      // Footer
       jadwalData.push([]);
-      jadwalData.push(['Kepala SMK Pacet', '', '', '', '', '', '', '', '', '', '', '', 'Mojokerto, 02 Februari 2026']);
-      jadwalData.push([]);
-      jadwalData.push([]);
-      jadwalData.push([]);
-      jadwalData.push(['Ir. Junaedi Hartanto, S.Pd', '', '', '', '', '', '', '', '', '', '', '', 'Wakasek Kurikulum']);
-      jadwalData.push(['NIP. -', '', '', '', '', '', '', '', '', '', '', '', '']);
+      jadwalData.push(["Kepala SMK Pacet", "", "", ...Array(scheduleClassColumns.length - 1).fill(""), "Mojokerto, 02 Februari 2026"]);
       jadwalData.push([]);
       jadwalData.push([]);
       jadwalData.push([]);
+      jadwalData.push(["Ir. Junaedi Hartanto, S.Pd", "", "", ...Array(scheduleClassColumns.length - 1).fill(""), "Wakasek Kurikulum"]);
+      jadwalData.push(["NIP. -", "", "", ...Array(scheduleClassColumns.length).fill(""), ""]);
       jadwalData.push([]);
-      jadwalData.push(['', '', '', '', '', '', '', '', '', '', '', '', 'Anik Yumari, S.Pd']);
-      jadwalData.push(['', '', '', '', '', '', '', '', '', '', '', '', 'NIP. -']);
+      jadwalData.push([]);
+      jadwalData.push([]);
+      jadwalData.push([]);
+      jadwalData.push(["", "", "", ...Array(scheduleClassColumns.length - 1).fill(""), "Anik Yumari, S.Pd"]);
+      jadwalData.push(["", "", "", ...Array(scheduleClassColumns.length - 1).fill(""), "NIP. -"]);
 
       const ws = XLSX.utils.aoa_to_sheet(jadwalData);
       XLSX.utils.book_append_sheet(wb, ws, 'Jadwal Pelajaran');
@@ -584,7 +656,7 @@ export default function AISchedulePage() {
           'Nama Guru': guruData.name,
           'Mata Pelajaran': teacher.mataPelajaran,
           'Tingkat Kelas': teacher.tingkatKelas?.join(", ") || "",
-          'Jurusan': teacher.jurusan?.join(", ") || "",
+          'Jurusan': teacher.jurusan?.map((jurusan: string) => getMajorLabel(jurusan)).join(", ") || "",
           'Request Hari': teacher.requestDay,
           'Jam Ke-': teacher.jamKe?.join(", ") || ""
         };
@@ -592,7 +664,7 @@ export default function AISchedulePage() {
       const wsTemplate = XLSX.utils.json_to_sheet(templateData);
       XLSX.utils.book_append_sheet(wb, wsTemplate, 'Template Guru');
 
-      XLSX.writeFile(wb, 'Jadwal_Pelajaran_SMK_PACET_2025_2026.xlsx');
+      XLSX.writeFile(wb, `Jadwal_Pelajaran_SMK_PACET_${academicYear.replace("/", "_")}.xlsx`);
     } catch (error) {
       console.error('Error exporting:', error);
       alert('Gagal mengekspor jadwal. Silakan coba lagi.');
@@ -667,7 +739,7 @@ export default function AISchedulePage() {
                   <tbody className="divide-y">
                     {scheduleTeachers.map((teacher: any, index: any) => {
                       const availableSlots = editableDayTimeSlots[teacher.requestDay] || [];
-                      const selectedMasterTeacher = masterTeachers.find((mt: any) => mt.id === teacher.teacherId);
+                      const selectedMasterTeacher = findMasterTeacher(teacher);
                       return (
                         <tr key={teacher.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
@@ -677,7 +749,7 @@ export default function AISchedulePage() {
                           <td className="px-4 py-3">
                             <select
                               value={teacher.teacherId}
-                              onChange={(e) => updateScheduleTeacher(teacher.id, 'teacherId', parseInt(e.target.value))}
+                              onChange={(e) => updateScheduleTeacher(teacher.id, 'teacherId', e.target.value)}
                               className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-sm"
                             >
                               {masterTeachers.map((mt: any) => (
@@ -712,15 +784,15 @@ export default function AISchedulePage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-1">
-                              {["TKJ", "TKR"].map((jurusan) => (
-                                <label key={jurusan} className="flex items-center gap-1">
+                              {majorOptions.map((jurusan: { code: string; label: string }) => (
+                                <label key={jurusan.code} className="flex items-center gap-1">
                                   <input
                                     type="checkbox"
-                                    checked={teacher.jurusan?.includes(jurusan)}
-                                    onChange={() => toggleJurusan(teacher.id, jurusan)}
+                                    checked={teacher.jurusan?.includes(jurusan.code)}
+                                    onChange={() => toggleJurusan(teacher.id, jurusan.code)}
                                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                                   />
-                                  <span className="text-xs text-gray-600">{jurusan}</span>
+                                  <span className="text-xs text-gray-600">{jurusan.label}</span>
                                 </label>
                               ))}
                             </div>
@@ -823,17 +895,27 @@ export default function AISchedulePage() {
             <div className="space-y-4">
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Tahun Ajaran</label>
-                <select className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <option>2024/2025</option>
-                  <option>2025/2026</option>
-                </select>
+                <input
+                  type="text"
+                  value={academicYear}
+                  onChange={(e) => setAcademicYear(e.target.value)}
+                  placeholder="Contoh: 2024/2025"
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <p className="text-xs text-gray-500">
+                  Isi manual sesuai kebutuhan, misalnya `2024/2025` sampai `2040/2041`.
+                </p>
               </div>
 
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Semester</label>
-                <select className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <option>Ganjil</option>
-                  <option>Genap</option>
+                <select
+                  value={semester}
+                  onChange={(e) => setSemester(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="Ganjil">Ganjil</option>
+                  <option value="Genap">Genap</option>
                 </select>
               </div>
 
@@ -841,15 +923,30 @@ export default function AISchedulePage() {
                 <label className="text-sm font-medium text-gray-700">Prioritas</label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                    <input
+                      type="checkbox"
+                      checked={priorities.minimizeConsecutive}
+                      onChange={(e) => setPriorities((prev) => ({ ...prev, minimizeConsecutive: e.target.checked }))}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
                     <span className="text-sm text-gray-600">Minimalkan jam mengajar beruntun</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" defaultChecked className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                    <input
+                      type="checkbox"
+                      checked={priorities.balanceLoad}
+                      onChange={(e) => setPriorities((prev) => ({ ...prev, balanceLoad: e.target.checked }))}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
                     <span className="text-sm text-gray-600">Meratakan beban mengajar</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" className="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                    <input
+                      type="checkbox"
+                      checked={priorities.avoidConflicts}
+                      onChange={(e) => setPriorities((prev) => ({ ...prev, avoidConflicts: e.target.checked }))}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
                     <span className="text-sm text-gray-600">Hindari bentrok jam mengajar</span>
                   </label>
                 </div>
@@ -971,20 +1068,20 @@ export default function AISchedulePage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Jurusan</label>
                 <div className="flex flex-wrap gap-1">
-                  {['TKJ', 'TKR'].map((jurusan) => (
-                    <label key={jurusan} className="flex items-center gap-1 px-2 py-1 border rounded cursor-pointer hover:bg-gray-100">
+                  {majorOptions.map((jurusan: { code: string; label: string }) => (
+                    <label key={jurusan.code} className="flex items-center gap-1 px-2 py-1 border rounded cursor-pointer hover:bg-gray-100">
                       <input
                         type="checkbox"
-                        checked={newRestriction.jurusan.includes(jurusan)}
+                        checked={newRestriction.jurusan.includes(jurusan.code)}
                         onChange={(e) => {
                           const newJurusan = e.target.checked
-                            ? [...newRestriction.jurusan, jurusan]
-                            : newRestriction.jurusan.filter(j => j !== jurusan);
+                            ? [...newRestriction.jurusan, jurusan.code]
+                            : newRestriction.jurusan.filter(j => j !== jurusan.code);
                           setNewRestriction({ ...newRestriction, jurusan: newJurusan });
                         }}
                         className="rounded border-gray-300 text-purple-600"
                       />
-                      <span className="text-xs">{jurusan}</span>
+                      <span className="text-xs">{jurusan.label}</span>
                     </label>
                   ))}
                 </div>
@@ -1068,9 +1165,8 @@ export default function AISchedulePage() {
                 </div>
                 <div className="p-4 overflow-x-auto">
                   <div className="min-w-[1200px]">
-                    {/* Header Jadwal */}
                     <div className="bg-gray-900 text-white py-3 px-4 text-center font-bold text-lg">
-                      JADWAL PELAJARAN SMK PACET Tp. 2025 / 2026
+                      {`JADWAL PELAJARAN SMK PACET Tp. ${academicYear}`}
                     </div>
 
                     <table className="w-full border-collapse border border-gray-400">
@@ -1079,35 +1175,37 @@ export default function AISchedulePage() {
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold w-[60px]">HARI</th>
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold w-[80px]">WAKTU</th>
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold w-[50px]">JAM KE-</th>
-                          {/* Kelas X */}
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-blue-100" colSpan={3}>X</th>
-                          {/* Kelas XI */}
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-green-100" colSpan={3}>XI</th>
-                          {/* Kelas XII */}
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-yellow-100" colSpan={3}>XII</th>
+                          {classColumnsByGrade.map(({ grade, items }) =>
+                            items.length > 0 ? (
+                              <th
+                                key={grade}
+                                className={`border border-gray-400 px-2 py-1 text-xs font-semibold ${getGradeHeaderClass(grade)}`}
+                                colSpan={items.length}
+                              >
+                                {grade}
+                              </th>
+                            ) : null
+                          )}
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold w-[120px]">PIKET</th>
                         </tr>
                         <tr className="bg-gray-100">
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold"></th>
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold"></th>
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold"></th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-blue-100">TKR 1</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-blue-100">TKR 2</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-blue-100">TKR 3</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-green-100">TKR 1</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-green-100">TKR 2</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-green-100">TKR 3</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-yellow-100">TKR 1</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-yellow-100">TKR 2</th>
-                          <th className="border border-gray-400 px-2 py-1 text-xs font-semibold bg-yellow-100">TKR 3</th>
+                          {scheduleClassColumns.map((classItem: any) => (
+                            <th
+                              key={classItem.id || classItem.className}
+                              className={`border border-gray-400 px-2 py-1 text-xs font-semibold ${getGradeHeaderClass(String(classItem.grade))}`}
+                            >
+                              {getClassColumnLabel(classItem)}
+                            </th>
+                          ))}
                           <th className="border border-gray-400 px-2 py-1 text-xs font-semibold"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {days.map((day, dayIndex) => {
                           const availableSlots = editableDayTimeSlots[day] || [];
-                          
-                          // Dapatkan guru yang piket hari ini (contoh data)
                           const guruPiket = masterTeachers[dayIndex % masterTeachers.length];
                           
                           return availableSlots.map((slotNo: any, slotIndex: any) => {
@@ -1126,38 +1224,14 @@ export default function AISchedulePage() {
                                 )}
                                 <td className="border border-gray-400 px-2 py-1 text-xs text-center">{slot?.time}</td>
                                 <td className="border border-gray-400 px-2 py-1 text-xs text-center">{slotNo}</td>
-
-                                {/* Kolom Kelas X TKR 1-3 */}
-                                {[1, 2, 3].map((kelasKe) => {
-                                  const jadwal = getJadwal(day, slotNo, "X", "TKR", kelasKe);
-                                  return (
-                                    <td key={`X-TKR-${kelasKe}`} className="border border-gray-400 px-1 py-1 text-xs text-center bg-blue-50">
-                                      {jadwal}
-                                    </td>
-                                  );
-                                })}
-
-                                {/* Kolom Kelas XI TKR 1-3 */}
-                                {[1, 2, 3].map((kelasKe) => {
-                                  const jadwal = getJadwal(day, slotNo, "XI", "TKR", kelasKe);
-                                  return (
-                                    <td key={`XI-TKR-${kelasKe}`} className="border border-gray-400 px-1 py-1 text-xs text-center bg-green-50">
-                                      {jadwal}
-                                    </td>
-                                  );
-                                })}
-
-                                {/* Kolom Kelas XII TKR 1-3 */}
-                                {[1, 2, 3].map((kelasKe) => {
-                                  const jadwal = getJadwal(day, slotNo, "XII", "TKR", kelasKe);
-                                  return (
-                                    <td key={`XII-TKR-${kelasKe}`} className="border border-gray-400 px-1 py-1 text-xs text-center bg-yellow-50">
-                                      {jadwal}
-                                    </td>
-                                  );
-                                })}
-
-                                {/* Kolom Piket */}
+                                {scheduleClassColumns.map((classItem: any) => (
+                                  <td
+                                    key={`${classItem.id || classItem.className}-${slotNo}`}
+                                    className={`border border-gray-400 px-1 py-1 text-xs text-center ${getGradeCellClass(String(classItem.grade))}`}
+                                  >
+                                    {getJadwal(day, slotNo, classItem)}
+                                  </td>
+                                ))}
                                 {isFirst && (
                                   <td rowSpan={availableSlots.length} className="border border-gray-400 px-2 py-1 text-xs text-center align-top">
                                     {guruPiket?.name}<br/>
