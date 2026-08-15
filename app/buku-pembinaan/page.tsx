@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Edit, Trash2, Eye, X, Printer, Save, Loader2, CalendarDays, FileText } from "lucide-react";
+import { Plus, Edit, Trash2, Eye, X, Printer, Save, Loader2, CalendarDays, FileText, Download } from "lucide-react";
+import { exportToExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
 
 type GuidanceEntry = {
@@ -98,6 +99,32 @@ export default function GuidanceBookPage() {
   );
 
   const resetForm = () => setFormData(createDefaultForm());
+
+  const exportToExcelHandler = async () => {
+    if (guidances.length === 0) return;
+
+    const headers = [
+      "No", "Hari", "Tanggal", "Nama Guru", "Keterangan", "Catatan"
+    ];
+
+    const rows = guidances.map((item) => {
+      return [
+        item.no,
+        item.day,
+        item.date,
+        item.teacherName,
+        item.keterangan,
+        item.notes?.trim() ? item.notes : "-"
+      ];
+    });
+
+    await exportToExcel(
+      rows,
+      headers,
+      `buku-pembinaan-${new Date().toISOString().split("T")[0]}`,
+      "Buku Pembinaan"
+    );
+  };
 
   const closeModal = () => {
     setModalMode(null);
@@ -204,6 +231,14 @@ export default function GuidanceBookPage() {
             <Printer size={18} />
             Cetak Laporan
           </button>
+          <button 
+            onClick={exportToExcelHandler} 
+            disabled={guidances.length === 0}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={18} />
+            Download Excel
+          </button>
           <button
             onClick={openCreateModal}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white transition hover:bg-primary-700"
@@ -225,32 +260,32 @@ export default function GuidanceBookPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full">
               <thead className="border-b bg-gray-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">No</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Hari</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tanggal</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Nama Guru</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Keterangan</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Catatan</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[80px]">No</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[120px]">Hari</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[140px]">Tanggal</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[200px]">Nama Guru</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[120px]">Keterangan</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Catatan</th>
+                  <th className="px-4 py-4 text-right text-sm font-semibold text-gray-600 w-[140px]">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {guidances.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-600">{item.no}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.day}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.date}</td>
-                    <td className="px-6 py-4 font-medium text-gray-800">{item.teacherName}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 text-gray-600">{item.no}</td>
+                    <td className="px-4 py-4 text-gray-600">{item.day}</td>
+                    <td className="px-4 py-4 text-gray-600">{item.date}</td>
+                    <td className="px-4 py-4 font-medium text-gray-800">{item.teacherName}</td>
+                    <td className="px-4 py-4">
                       <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${getKeteranganColor(item.keterangan)}`}>
                         {item.keterangan}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{item.notes?.trim() ? item.notes : "-"}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-4 py-4 text-sm text-gray-600 max-w-xs truncate" title={item.notes}>{item.notes?.trim() ? item.notes : "-"}</td>
+                    <td className="px-4 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => openViewModal(item)} className="rounded-lg p-2 hover:bg-gray-100" title="Lihat Detail">
                           <Eye size={16} className="text-gray-600" />
@@ -271,7 +306,7 @@ export default function GuidanceBookPage() {
                 ))}
                 {guidances.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-400">
+                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
                       Belum ada catatan pembinaan guru.
                     </td>
                   </tr>

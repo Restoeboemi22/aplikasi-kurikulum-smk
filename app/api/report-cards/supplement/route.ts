@@ -132,6 +132,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const normalizedReportCity = String(reportCity || "").trim() || "Pacet";
+    const normalizedReportDate = String(reportDate || "").trim();
+
     const supplement = await prisma.reportCardSupplement.upsert({
       where: {
         studentId_academicYear_semester: {
@@ -151,8 +154,8 @@ export async function POST(request: NextRequest) {
         personalityKerajinan: normalizeScoreText(personalityKerajinan),
         personalityKerapian: normalizeScoreText(personalityKerapian),
         homeroomNote: String(homeroomNote || "").trim(),
-        reportCity: String(reportCity || "").trim() || "Pacet",
-        reportDate: String(reportDate || "").trim(),
+        reportCity: normalizedReportCity,
+        reportDate: normalizedReportDate,
         homeroomSignatureName: String(homeroomSignatureName || "").trim(),
         homeroomSignatureTitle: String(homeroomSignatureTitle || "").trim() || "Wali Kelas",
         principalSignatureName:
@@ -176,8 +179,8 @@ export async function POST(request: NextRequest) {
         personalityKerajinan: normalizeScoreText(personalityKerajinan),
         personalityKerapian: normalizeScoreText(personalityKerapian),
         homeroomNote: String(homeroomNote || "").trim(),
-        reportCity: String(reportCity || "").trim() || "Pacet",
-        reportDate: String(reportDate || "").trim(),
+        reportCity: normalizedReportCity,
+        reportDate: normalizedReportDate,
         homeroomSignatureName: String(homeroomSignatureName || "").trim(),
         homeroomSignatureTitle: String(homeroomSignatureTitle || "").trim() || "Wali Kelas",
         principalSignatureName:
@@ -188,6 +191,24 @@ export async function POST(request: NextRequest) {
         updatedByUserId: session.uid,
       },
     });
+
+    if (student.className) {
+      await prisma.reportCardSupplement.updateMany({
+        where: {
+          className: student.className,
+          academicYear,
+          semester,
+          NOT: {
+            studentId,
+          },
+        },
+        data: {
+          reportCity: normalizedReportCity,
+          reportDate: normalizedReportDate,
+          updatedByUserId: session.uid,
+        },
+      });
+    }
 
     return NextResponse.json(supplement);
   } catch (error) {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, CheckCircle2, Clock, Printer, Save, Trash2, Filter, Loader2, AlertCircle } from "lucide-react";
+import { Plus, CheckCircle2, Clock, Printer, Save, Trash2, Filter, Loader2, AlertCircle, Download } from "lucide-react";
+import { exportToExcel } from "@/lib/excel-export";
 import { useAuth } from "@/lib/auth-context";
 import { canAccessTab, defaultTabFor } from "@/lib/permissions";
 import {
@@ -394,6 +395,39 @@ export default function TeachingJournalPage() {
     setFilterTeacher("");
   };
 
+  const exportToExcelHandler = async () => {
+    if (filteredJournals.length === 0) return;
+
+    const headers = [
+      "Tanggal", "Guru", "Mata Pelajaran", "Periode", "Kelas", "Jam ke-",
+      "Materi", "Hadir", "Tidak Hadir", "Catatan / Kendala", "Status"
+    ];
+
+    const rows = filteredJournals.map((item) => {
+      const jamList = item.jamKe ? item.jamKe.split(",").map(j => j.trim()).filter(Boolean).join(", ") : "";
+      return [
+        formatDate(item.date),
+        item.teacher,
+        item.subject || "-",
+        `${item.semester || defaultPeriod.term} ${item.academicYear || defaultPeriod.academicYear}`,
+        item.class,
+        jamList,
+        item.material,
+        item.presentCount || "-",
+        item.absentCount || "-",
+        item.issues || "-",
+        item.status
+      ];
+    });
+
+    await exportToExcel(
+      rows,
+      headers,
+      `jurnal-mengajar-${new Date().toISOString().split("T")[0]}`,
+      "Jurnal Mengajar"
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -445,6 +479,14 @@ export default function TeachingJournalPage() {
               <button onClick={() => window.print()} className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
                 <Printer size={18} />
                 Cetak Laporan
+              </button>
+              <button 
+                onClick={exportToExcelHandler} 
+                disabled={filteredJournals.length === 0}
+                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download size={18} />
+                Download Excel
               </button>
               <button onClick={() => setActiveTab("format")} className="flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition">
                 <Plus size={18} />
@@ -562,24 +604,24 @@ export default function TeachingJournalPage() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tanggal</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Mata Pelajaran</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Periode</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Kelas</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Jam ke-</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Materi</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Hadir</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tidak Hadir</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Catatan / Kendala</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Status</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[140px]">Tanggal</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[180px]">Guru</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[160px]">Mata Pelajaran</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[140px]">Periode</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[100px]">Kelas</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[140px]">Jam ke-</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Materi</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-gray-600 w-[80px]">Hadir</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-gray-600 w-[100px]">Tidak Hadir</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">Catatan / Kendala</th>
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600 w-[100px]">Status</th>
+                  <th className="px-4 py-4 text-right text-sm font-semibold text-gray-600 w-[80px]">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {loading && (
                   <tr>
-                    <td colSpan={12} className="px-6 py-8 text-center text-gray-400 text-sm">
+                    <td colSpan={12} className="px-4 py-8 text-center text-gray-400 text-sm">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 size={16} className="animate-spin" />
                         Memuat jurnal...
@@ -589,7 +631,7 @@ export default function TeachingJournalPage() {
                 )}
                 {!loading && filteredJournals.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-6 py-8 text-center text-gray-400 text-sm">
+                    <td colSpan={12} className="px-4 py-8 text-center text-gray-400 text-sm">
                       {journals.length === 0
                         ? "Belum ada jurnal. Isi lewat tab \"Format Jurnal Mengajar\"."
                         : "Tidak ada jurnal untuk filter laporan yang dipilih."}
@@ -600,12 +642,12 @@ export default function TeachingJournalPage() {
                   const jamList = item.jamKe ? item.jamKe.split(",").map(j => j.trim()).filter(Boolean) : [];
                   return (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
-                      <td className="px-6 py-4 font-medium text-gray-800 whitespace-nowrap">{item.teacher}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.subject || "-"}</td>
-                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{item.semester || defaultPeriod.term} {item.academicYear || defaultPeriod.academicYear}</td>
-                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">{item.class}</td>
-                      <td className="px-6 py-4 text-gray-600">
+                      <td className="px-4 py-4 text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>
+                      <td className="px-4 py-4 font-medium text-gray-800 whitespace-nowrap">{item.teacher}</td>
+                      <td className="px-4 py-4 text-gray-600">{item.subject || "-"}</td>
+                      <td className="px-4 py-4 text-gray-600 whitespace-nowrap">{item.semester || defaultPeriod.term} {item.academicYear || defaultPeriod.academicYear}</td>
+                      <td className="px-4 py-4 text-gray-600 whitespace-nowrap">{item.class}</td>
+                      <td className="px-4 py-4 text-gray-600">
                         {jamList.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {jamList.map((jam) => (
@@ -616,11 +658,11 @@ export default function TeachingJournalPage() {
                           </div>
                         ) : "-"}
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{item.material}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.presentCount || "-"}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.absentCount || "-"}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.issues || "-"}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 text-gray-600 max-w-xs truncate" title={item.material}>{item.material}</td>
+                      <td className="px-4 py-4 text-gray-600 text-center">{item.presentCount || "-"}</td>
+                      <td className="px-4 py-4 text-gray-600 text-center">{item.absentCount || "-"}</td>
+                      <td className="px-4 py-4 text-gray-600 max-w-xs truncate" title={item.issues}>{item.issues || "-"}</td>
+                      <td className="px-4 py-4">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
                             item.status === "SUDAH"
@@ -632,7 +674,7 @@ export default function TeachingJournalPage() {
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-4 py-4 text-right">
                         <button
                           onClick={() => handleDelete(item.id)}
                           className="p-2 hover:bg-red-100 rounded-lg"

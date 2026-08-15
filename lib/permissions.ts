@@ -4,6 +4,7 @@
 export type Role = "ADMIN" | "TEACHER";
 export type MenuAccessContext = {
   isHomeroomTeacher?: boolean;
+  homeroomClassNames?: string[];
 };
 export type PathAccessContext = MenuAccessContext & {
   role: Role;
@@ -78,16 +79,28 @@ function normalizePathname(pathname: string): string {
   return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
+function hasHomeroomMajorAccess(homeroomClassNames: string[] = [], targetMajorCode: "TKJ" | "TKR") {
+  const expected = ` ${targetMajorCode} `;
+  return homeroomClassNames.some((className) => {
+    const normalized = String(className || "").trim().toUpperCase();
+    return normalized.includes(expected) || normalized.endsWith(` ${targetMajorCode}`);
+  });
+}
+
 export function canAccessMenu(role: Role, menuId: string, context: MenuAccessContext = {}): boolean {
   if (role === "ADMIN") return true;
-  if (
-    menuId === "penilaian-raport" ||
-    menuId === "penilaian-raport-tkj" ||
-    menuId === "penilaian-raport-tkr" ||
-    menuId === "penilaian-raport-tkj-sas" ||
-    menuId === "penilaian-raport-tkr-sas"
-  ) {
+  const homeroomClassNames = context.homeroomClassNames ?? [];
+  if (menuId === "master-nilai") {
     return Boolean(context.isHomeroomTeacher);
+  }
+  if (menuId === "penilaian-raport") {
+    return Boolean(context.isHomeroomTeacher);
+  }
+  if (menuId === "penilaian-raport-tkj" || menuId === "penilaian-raport-tkj-sas") {
+    return Boolean(context.isHomeroomTeacher) && hasHomeroomMajorAccess(homeroomClassNames, "TKJ");
+  }
+  if (menuId === "penilaian-raport-tkr" || menuId === "penilaian-raport-tkr-sas") {
+    return Boolean(context.isHomeroomTeacher) && hasHomeroomMajorAccess(homeroomClassNames, "TKR");
   }
   return TEACHER_ALLOWED_MENU_IDS.includes(menuId);
 }

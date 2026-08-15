@@ -35,12 +35,45 @@ import {
   getClassPicketMonthName,
   getClassPicketWeekLabel,
   getMonitoringSummaryForSchedule,
-  isGraduatedClass,
   matchesTeacherScheduleIdentity,
   toDateInputValue,
 } from "@/lib/class-picket";
 
 const WEEK_OPTIONS = ["Minggu ke-I", "Minggu ke-II", "Minggu ke-III", "Minggu ke-IV", "Minggu ke-V"];
+
+const getSchedulePartsFromDateValue = (value: string) => {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return {
+    year: String(parsed.getFullYear()),
+    month: getClassPicketMonthName(parsed),
+    week: getClassPicketWeekLabel(parsed),
+    day: getClassPicketDayName(parsed),
+  };
+};
+
+const getDateValueFromScheduleParts = ({
+  year,
+  month,
+  week,
+  day,
+}: {
+  year: string;
+  month: string;
+  week: string;
+  day: string;
+}) => {
+  const resolvedWeek = week === "all" ? WEEK_OPTIONS[0] : week;
+  const resolvedDate = getDateFromScheduleFilter({
+    year,
+    month,
+    week: resolvedWeek,
+    day,
+  });
+
+  return resolvedDate ? toDateInputValue(resolvedDate) : "";
+};
 
 const getNextStatus = (status: ClassPicketStatus): ClassPicketStatus => {
   if (status === "empty") return "done";
@@ -160,24 +193,15 @@ function PicketReportSheet({
               <tr key={className}>
                 <td className="border border-gray-700 px-4 py-3 text-center text-2xl font-bold">{index + 1}</td>
                 <td className="border border-gray-700 px-4 py-3 text-center text-2xl font-bold">{className}</td>
-                {isGraduatedClass(className) ? (
-                  <td
-                    colSpan={CLASS_PICKET_PERIODS.length}
-                    className="border border-gray-700 px-4 py-6 text-center text-3xl font-black text-gray-900"
-                  >
-                    LULUS
+                {CLASS_PICKET_PERIODS.map((period) => (
+                  <td key={period} className="border border-gray-700 px-3 py-3 text-center">
+                    <StatusToggleCell
+                      status={reportState[className]?.[period] || "empty"}
+                      onClick={onToggle ? () => onToggle(className, period) : undefined}
+                      readOnly={readOnly}
+                    />
                   </td>
-                ) : (
-                  CLASS_PICKET_PERIODS.map((period) => (
-                    <td key={period} className="border border-gray-700 px-3 py-3 text-center">
-                      <StatusToggleCell
-                        status={reportState[className]?.[period] || "empty"}
-                        onClick={onToggle ? () => onToggle(className, period) : undefined}
-                        readOnly={readOnly}
-                      />
-                    </td>
-                  ))
-                )}
+                ))}
               </tr>
             ))}
           </tbody>
@@ -476,6 +500,7 @@ export default function ClassPickupPage() {
   const [formWeek, setFormWeek] = useState("all"); // Default to "all" (Seluruh Minggu) for easier monthly schedule
   const [formMonth, setFormMonth] = useState(() => getClassPicketMonthName(new Date()) || "Januari");
   const [formYear, setFormYear] = useState(() => String(new Date().getFullYear()));
+  const [formDate, setFormDate] = useState(() => toDateInputValue(new Date()));
   const [selectedTeacherId, setSelectedTeacherId] = useState("");
   const [selectedTeacherId2, setSelectedTeacherId2] = useState(""); // Second teacher state
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
@@ -552,6 +577,19 @@ export default function ClassPickupPage() {
   useEffect(() => {
     loadSchedules();
   }, []);
+
+  useEffect(() => {
+    const nextDateValue = getDateValueFromScheduleParts({
+      year: formYear,
+      month: formMonth,
+      week: formWeek,
+      day: formDay,
+    });
+
+    if (nextDateValue && nextDateValue !== formDate) {
+      setFormDate(nextDateValue);
+    }
+  }, [formDate, formDay, formMonth, formWeek, formYear]);
 
   useEffect(() => {
     let cancelled = false;
@@ -667,14 +705,16 @@ export default function ClassPickupPage() {
   );
 
   const resetAdminForm = () => {
+    const today = new Date();
     setEditingScheduleId(null);
     setSelectedTeacherId("");
     setSelectedTeacherId2("");
     setSelectedClasses([]);
-    setFormDay(getClassPicketDayName(new Date()) || "Senin");
+    setFormDay(getClassPicketDayName(today) || "Senin");
     setFormWeek("all");
-    setFormMonth(getClassPicketMonthName(new Date()) || "Januari");
-    setFormYear(String(new Date().getFullYear()));
+    setFormMonth(getClassPicketMonthName(today) || "Januari");
+    setFormYear(String(today.getFullYear()));
+    setFormDate(toDateInputValue(today));
   };
 
   const handleSaveSchedule = async () => {
@@ -747,6 +787,14 @@ export default function ClassPickupPage() {
     setFormWeek(item.week);
     setFormMonth(item.month);
     setFormYear(item.year);
+    setFormDate(
+      getDateValueFromScheduleParts({
+        year: item.year,
+        month: item.month,
+        week: item.week,
+        day: item.day,
+      })
+    );
     setActiveTab("create");
   };
 
@@ -1074,17 +1122,25 @@ export default function ClassPickupPage() {
 
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-gray-500">Hari</label>
-                <select
-                  value={formDay}
-                  onChange={(e) => setFormDay(e.target.value)}
+                <input
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => {
+                    const nextValue = e.target.value;
+                    setFormDate(nextValue);
+                    const nextParts = getSchedulePartsFromDateValue(nextValue);
+                    if (!nextParts) return;
+
+                    setFormYear(nextParts.year);
+                    setFormMonth(nextParts.month);
+                    setFormWeek(nextParts.week);
+                    setFormDay(nextParts.day);
+                  }}
                   className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  {CLASS_PICKET_DAYS.map((day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
+                />
+                <p className="text-xs text-gray-500">
+                  Pilih tanggal, lalu sistem otomatis menyesuaikan tahun, bulan, minggu, dan hari.
+                </p>
               </div>
             </div>
 

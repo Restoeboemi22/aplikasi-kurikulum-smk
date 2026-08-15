@@ -664,7 +664,7 @@ export default function ReportCardPage({
               <option value="">Pilih siswa</option>
               {students.map((student) => (
                 <option key={student.id} value={student.id}>
-                  {student.name} ({student.nis})
+                  {student.name} ({student.nis || "-"})
                 </option>
               ))}
             </select>
@@ -884,6 +884,9 @@ export default function ReportCardPage({
               <div className="space-y-4">
                 <div>
                   <p className="mb-2 text-sm font-semibold text-slate-700">Pengesahan Raport</p>
+                  <p className="mb-3 text-xs text-slate-500">
+                    `Kota` dan `Tanggal Raport` otomatis dipakai untuk semua siswa pada kelas yang sama.
+                  </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</label>
@@ -1008,7 +1011,7 @@ export default function ReportCardPage({
                   </tr>
                   <tr>
                     <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Induk / NIS</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.student.nis}</td>
+                    <td className="px-3 py-2 text-xs text-gray-900">{preview.student.nis || "-"}</td>
                     <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Program Keahlian</span><span>:</span></div></td>
                     <td className="px-3 py-2 text-xs text-gray-900">{preview.classInfo.programKeahlian}</td>
                   </tr>
@@ -1046,7 +1049,7 @@ export default function ReportCardPage({
                         <thead className="bg-slate-50">
                           <tr>
                             <th className="w-10 border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">No</th>
-                            <th className="w-[26%] border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">Mata Pelajaran</th>
+                            <th className="w-[22%] border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">Mata Pelajaran</th>
                             {reportVariant === "SAS" ? (
                               <>
                                 <th className="w-20 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Nilai Akhir</th>
@@ -1061,6 +1064,8 @@ export default function ReportCardPage({
                                 <th className="border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">{competenceLabel}</th>
                               </>
                             )}
+                            <th className="w-20 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Rata-rata</th>
+                            <th className="w-24 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Keterangan</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1082,6 +1087,8 @@ export default function ReportCardPage({
                                   <td className="border px-2 py-2 text-[11px] leading-5 text-slate-700">{item.competenceNote}</td>
                                 </>
                               )}
+                              <td className="border px-2 py-2 text-center text-[11px] text-slate-700"></td>
+                              <td className="border px-2 py-2 text-center text-[11px] text-slate-700"></td>
                             </tr>
                           ))}
                           {groupIndex === preview.groupedRows.length - 1 && (
@@ -1109,6 +1116,8 @@ export default function ReportCardPage({
                                     <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
                                   </>
                                 )}
+                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
+                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
                               </tr>
                               <tr className="bg-slate-50">
                                 <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
@@ -1133,6 +1142,12 @@ export default function ReportCardPage({
                                     <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
                                   </>
                                 )}
+                                <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
+                                  {preview.summary.averageScore === null ? "-" : preview.summary.averageScore.toFixed(2)}
+                                </td>
+                                <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
+                                  {preview.summary.averageScore === null ? "-" : (preview.summary.averageScore < 78 ? "Tidak Naik Kelas" : "Naik Kelas")}
+                                </td>
                               </tr>
                             </>
                           )}
@@ -1220,7 +1235,7 @@ export default function ReportCardPage({
                     Orang Tua / Wali
                   </p>
                   <div className="report-signature-space h-16" />
-                  <div className="report-signature-name-left text-sm text-slate-900">nama dan ttd</div>
+                  <div className="border-b border-slate-900 w-[160px]" />
                 </div>
                 <div
                   className="report-signature-block report-signature-block-right col-start-3 flex w-[320px] flex-col items-center text-center"
@@ -1232,7 +1247,7 @@ export default function ReportCardPage({
                     {preview.notes.signatures.homeroom.title}
                   </p>
                   <div className="report-signature-space h-16" />
-                  <div className="report-signature-name text-sm text-slate-900">
+                  <div className="report-signature-name text-sm font-bold underline text-slate-900">
                     {preview.notes.signatures.homeroom.name || "-"}
                   </div>
                 </div>
@@ -1245,7 +1260,7 @@ export default function ReportCardPage({
                   Kepala SMKS Pacet
                 </p>
                 <div className="report-signature-space h-16" />
-                <div className="report-signature-name text-sm text-slate-900">
+                <div className="report-signature-name text-sm font-bold underline text-slate-900">
                   {preview.notes.signatures.principal.name || "-"}
                 </div>
                 {preview.notes.signatures.principal.nip ? (

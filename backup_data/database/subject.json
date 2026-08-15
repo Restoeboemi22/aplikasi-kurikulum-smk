@@ -1,0 +1,114 @@
+[
+  {
+    "id": "cmqlwsz9n0000z1n0pepw3a7n",
+    "code": "PABP",
+    "name": "Pendidikan Agama dan Budi Pekerti",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0001z1n042l9wzif",
+    "code": "PPS",
+    "name": "Pendidikan Pancasila",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0002z1n08jijdl7m",
+    "code": "BIN",
+    "name": "Bahasa Indonesia",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0003z1n09izpyd73",
+    "code": "PJOK",
+    "name": "Pendidikan Jasmani , Olah Raga dan Kesehatan",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0004z1n0wfim9lp2",
+    "code": "SEJ",
+    "name": "Sejarah",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0005z1n0cqbwg2s8",
+    "code": "SBD",
+    "name": "Seni Budaya",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9n0006z1n07kc6usol",
+    "code": "BSJ",
+    "name": "Bahasa dan Sastra Jawa",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o0007z1n0jrmi7zoa",
+    "code": "MTK",
+    "name": "Matematika",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o0008z1n0pm4yf4eh",
+    "code": "BIG",
+    "name": "Bahasa Inggris",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o0009z1n0ocjc5zxh",
+    "code": "INF",
+    "name": "Informatika",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000az1n0aop8uwav",
+    "code": "IPAS",
+    "name": "Projek Ilmu Pengetahuan Alam dan Sosial",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000bz1n08q84fe0z",
+    "code": "DDPK",
+    "name": "Dasar-Dasar Program Keahlian",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000cz1n0lhc5j6gb",
+    "code": "KK",
+    "name": "Konsentrasi Keahlian",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000dz1n0iugrykv6",
+    "code": "PKK",
+    "name": "Projek Kreatif dan Kewirausahaan",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000ez1n0h91oulro",
+    "code": "PKL",
+    "name": "Praktik Kerja Lapangan",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  },
+  {
+    "id": "cmqlwsz9o000fz1n0srsbm64y",
+    "code": "MPP",
+    "name": "Mata Pelajaran pilihan",
+    "createdAt": "2026-06-20T05:20:40.325Z",
+    "updatedAt": "2026-06-20T05:20:40.325Z"
+  }
+]

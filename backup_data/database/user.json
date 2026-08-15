@@ -1,0 +1,232 @@
+[
+  {
+    "id": "cmr0mpn2k0004ju048p3j32f4",
+    "name": "Moh Junaedi Hartanto, S.Pd",
+    "email": "14111986@kurikulum-smks-pacet.local",
+    "role": "ADMIN",
+    "nip": "14111986",
+    "photoUrl": null,
+    "createdAt": "2026-06-30T12:34:41.034Z",
+    "updatedAt": "2026-06-30T12:38:52.450Z"
+  },
+  {
+    "id": "cmqlivmsf0000jy047mlg3g0o",
+    "name": "03041984",
+    "email": "03041984@kurikulum-smks-pacet.local",
+    "role": "ADMIN",
+    "nip": "03041984",
+    "photoUrl": null,
+    "createdAt": "2026-06-19T22:50:49.504Z",
+    "updatedAt": "2026-06-20T05:15:26.676Z"
+  },
+  {
+    "id": "cmqtff1v2008kld04h4ggoou1",
+    "name": "Bambang Setiawan, S.T",
+    "email": "09071985@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "16",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:06.447Z",
+    "updatedAt": "2026-06-25T12:40:09.784Z"
+  },
+  {
+    "id": "cmqtff2ou008vld04f8lfajta",
+    "name": "Firda Nur Zamida, S.Sos",
+    "email": "14042000@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "18",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:07.518Z",
+    "updatedAt": "2026-07-10T01:31:43.055Z"
+  },
+  {
+    "id": "cmqtff1150080ld04zysbew8p",
+    "name": "Rizky Putri Prayitna, S.Pd",
+    "email": "26101992@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "14",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:05.369Z",
+    "updatedAt": "2026-07-21T05:09:53.953Z"
+  },
+  {
+    "id": "cmqtff48z009old04ayhu042t",
+    "name": "Fa'izah Vidyastuty, S.Psi",
+    "email": "08031996@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "22",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:09.539Z",
+    "updatedAt": "2026-07-21T05:10:52.921Z"
+  },
+  {
+    "id": "cmqtff3vl009kld04rdkkdm6z",
+    "name": "Keymas Alfian Dafa Septefirasyah",
+    "email": "19092006@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "21",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:09.058Z",
+    "updatedAt": "2026-07-21T08:13:02.412Z"
+  },
+  {
+    "id": "cmqtfevy40050ld04fxhwdvgi",
+    "name": "Drs. Wardoyo",
+    "email": "16121963@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "02",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:35:58.780Z",
+    "updatedAt": "2026-07-12T12:52:48.172Z"
+  },
+  {
+    "id": "cmqtfewu7005gld04a709rgzl",
+    "name": "Anik Yunani, S.Pd",
+    "email": "04031984@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "04",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:35:59.935Z",
+    "updatedAt": "2026-07-21T02:30:34.543Z"
+  },
+  {
+    "id": "cmqtff297008qld0415v1wj0q",
+    "name": "Erwin Yulianto, S.T",
+    "email": "28021982@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "17",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:06.956Z",
+    "updatedAt": "2026-06-25T13:19:37.621Z"
+  },
+  {
+    "id": "cmqtfex82005old04sydan7iz",
+    "name": "Kris Maulana Pamungkas",
+    "email": "14071998@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "05",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:00.435Z",
+    "updatedAt": "2026-07-12T12:55:38.959Z"
+  },
+  {
+    "id": "cmqtff1fc008cld04s70ux1vg",
+    "name": "Muhammad Rois Hasan, S.H",
+    "email": "28121995@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "15",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:05.880Z",
+    "updatedAt": "2026-07-20T04:26:37.914Z"
+  },
+  {
+    "id": "cmqtfeyuw006ild04y3yzen9b",
+    "name": "Sugeng Sariono, S.T",
+    "email": "12101971@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "09",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:02.553Z",
+    "updatedAt": "2026-07-12T12:56:56.397Z"
+  },
+  {
+    "id": "cmqtff32z0092ld04u4yzmsj9",
+    "name": "Khusnul Chotimah, S.Pd",
+    "email": "01111986@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "19",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:08.028Z",
+    "updatedAt": "2026-07-21T02:45:57.857Z"
+  },
+  {
+    "id": "cmqtfeyh60069ld041ytz4r71",
+    "name": "Hadi Cahyono, S.T",
+    "email": "29041982@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "08",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:02.059Z",
+    "updatedAt": "2026-07-21T02:49:03.504Z"
+  },
+  {
+    "id": "cmqtfeza9006mld04e9jo0mr7",
+    "name": "Anik Sugiarti, S.Pd",
+    "email": "16091985@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "10",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:03.105Z",
+    "updatedAt": "2026-07-18T13:26:34.509Z"
+  },
+  {
+    "id": "cmqtfezp9006xld04b3iftdol",
+    "name": "Duwi Ayu Puspita Ningrum, S.Pd",
+    "email": "25011994@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "11",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:03.645Z",
+    "updatedAt": "2026-07-21T04:14:41.536Z"
+  },
+  {
+    "id": "cmqtfewd80059ld04xsd12i5v",
+    "name": "Drs. Missalim",
+    "email": "29121965@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "03",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:35:59.324Z",
+    "updatedAt": "2026-07-21T04:15:05.693Z"
+  },
+  {
+    "id": "cmqtff05y007dld04n0kdprrm",
+    "name": "Fatonah, S.Pd",
+    "email": "22051968@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "12",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:04.246Z",
+    "updatedAt": "2026-07-21T04:19:56.013Z"
+  },
+  {
+    "id": "cmqtfey410062ld04qrhy3fjq",
+    "name": "Suci Murni Prastiwi Wibowo, S.Pd",
+    "email": "07082000@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "07",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:01.586Z",
+    "updatedAt": "2026-07-21T04:21:58.038Z"
+  },
+  {
+    "id": "cmqtff3ha009dld04do8itxq1",
+    "name": "Angela Yerosela Ramonda Cahyanti, Si.Kom",
+    "email": "31011998@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "20",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:08.543Z",
+    "updatedAt": "2026-07-21T04:24:43.066Z"
+  },
+  {
+    "id": "cmqtfexng005uld04yttubkrj",
+    "name": "Ani Mahfudloh, S.E",
+    "email": "10101981@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "06",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:00.988Z",
+    "updatedAt": "2026-07-21T03:08:27.831Z"
+  },
+  {
+    "id": "cmqtff0ms007tld0496qkd88b",
+    "name": "Choirul Muslim, S.Pd I",
+    "email": "07071975@kurikulum-smks-pacet.local",
+    "role": "TEACHER",
+    "nip": "13",
+    "photoUrl": null,
+    "createdAt": "2026-06-25T11:36:04.853Z",
+    "updatedAt": "2026-07-21T03:09:54.404Z"
+  }
+]

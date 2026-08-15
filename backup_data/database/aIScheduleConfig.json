@@ -1,0 +1,14 @@
+[
+  {
+    "id": "cmqtm3w4d0000jo04dgrrk0ce",
+    "scope": "default",
+    "academicYear": "2026/2027",
+    "semester": "Ganjil",
+    "scheduleTeachersJson": "[{\"id\":1,\"teacherId\":\"cmqtfevye0052ld04ra422ymx\",\"name\":\"Drs. Wardoyo\",\"kodeGuru\":\"02\",\"mataPelajaran\":\"Konsentrasi Keahlian\",\"tingkatKelas\":[\"XI\",\"XII\"],\"jurusan\":[\"TKR\"],\"requestDay\":\"Senin\",\"jamKe\":[]}]",
+    "dayTimeSlotsJson": "{\"Senin\":[1,2,3,4,5,6,7,8],\"Selasa\":[1,2,3,4,5,6,7,8],\"Rabu\":[1,2,3,4,5,6,7,8],\"Kamis\":[1,2,3,4,5,6,7,8],\"Jumat\":[1,2,3,4,5,6],\"Sabtu\":[1,2,3,4,5]}",
+    "religiousRestrictionsJson": "[]",
+    "prioritiesJson": "{\"minimizeConsecutive\":true,\"balanceLoad\":true,\"avoidConflicts\":false}",
+    "createdAt": "2026-06-25T14:43:23.101Z",
+    "updatedAt": "2026-07-12T13:08:41.599Z"
+  }
+]

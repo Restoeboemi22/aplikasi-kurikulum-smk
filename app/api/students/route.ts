@@ -7,11 +7,10 @@ const normalizeNisn = (value?: string | null) => (value || '').replace(/\D/g, ''
 const normalizeText = (value: unknown) => String(value ?? '').trim();
 
 function validateStudentPayload(args: { nis?: string; nisn?: string; name?: string }) {
-  const nis = normalizeText(args.nis);
   const name = normalizeText(args.name);
 
-  if (!nis || !name) {
-    return 'NIS dan nama wajib diisi';
+  if (!name) {
+    return 'Nama wajib diisi';
   }
 
   return null;
@@ -27,11 +26,15 @@ export async function GET(request: NextRequest) {
     const className = searchParams.get('className');
 
     const students = await prisma.student.findMany({
-      orderBy: { nis: 'asc' }
+      orderBy: [{ name: 'asc' }]
     });
+    const normalizedStudents = students.map((student) => ({
+      ...student,
+      nis: student.nis || '',
+    }));
 
     if (session.role === 'ADMIN') {
-      const filteredStudents = students.filter((student) => {
+      const filteredStudents = normalizedStudents.filter((student) => {
         const className = student.className || '';
         const matchesKelas = !classLevel || className.startsWith(classLevel);
         const matchesJurusan = !major || className.includes(major);
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const filteredStudents = students.filter((student) => {
+    const filteredStudents = normalizedStudents.filter((student) => {
       const studentClassName = student.className || '';
       const matchesTeacherAssignment = teacher.teachingAssignments.some((assignment) => {
         const subjectMatch = !subject || assignment.subject === subject;
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     const student = await prisma.student.create({
       data: { 
-        nis: normalizeText(nis),
+        nis: normalizeText(nis) || null,
         nisn: normalizeNisn(nisn) || null,
         name: normalizeText(name),
         gender: normalizeText(gender) || null,
@@ -169,7 +172,7 @@ export async function PUT(request: NextRequest) {
     const student = await prisma.student.update({
       where: { id },
       data: { 
-        nis: normalizeText(nis),
+        nis: normalizeText(nis) || null,
         nisn: normalizeNisn(nisn) || null,
         name: normalizeText(name),
         gender: normalizeText(gender) || null,

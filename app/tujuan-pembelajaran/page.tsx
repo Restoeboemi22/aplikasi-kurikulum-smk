@@ -690,15 +690,15 @@ export default function TeachingObjectivesPage() {
               <h3 className="text-lg font-bold text-slate-900">Preview CP di Raport</h3>
               <div className="mt-4 space-y-3 text-sm text-slate-700">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="font-semibold text-slate-900">93 - 100</p>
+                  <p className="font-semibold text-slate-900">91 - 100</p>
                   <p className="mt-1">{buildCpPreview("sangat baik", objectiveLines)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="font-semibold text-slate-900">85 - 92</p>
+                  <p className="font-semibold text-slate-900">83 - 90</p>
                   <p className="mt-1">{buildCpPreview("baik", objectiveLines)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="font-semibold text-slate-900">78 - 84</p>
+                  <p className="font-semibold text-slate-900">78 - 82</p>
                   <p className="mt-1">{buildCpPreview("cukup", objectiveLines)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">

@@ -35,24 +35,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function loadProfile(): Promise<AppUser> {
-  const response = await fetch("/api/auth/me", { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Gagal memuat profil session.");
-  }
 
-  const result = await response.json();
-  const user = result.user;
-
-  return {
-    uid: user.uid,
-    nip: user.nip ?? "",
-    name: user.name ?? "Pengguna",
-    role: (user.role as Role) === "ADMIN" ? "ADMIN" : "TEACHER",
-    isHomeroomTeacher: Boolean(user.isHomeroomTeacher),
-    homeroomClassNames: Array.isArray(user.homeroomClassNames) ? user.homeroomClassNames : [],
-  };
-}
 
 function mapSessionUser(user: any): AppUser {
   return {
@@ -65,10 +48,21 @@ function mapSessionUser(user: any): AppUser {
   };
 }
 
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 async function syncServerSession(fbUser: FirebaseUser): Promise<AppUser> {
   const idToken = await fbUser.getIdToken();
 
-  const response = await fetch("/api/auth/session", {
+  const response = await fetchWithTimeout("/api/auth/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
@@ -79,11 +73,16 @@ async function syncServerSession(fbUser: FirebaseUser): Promise<AppUser> {
     throw new Error(result?.error || "Gagal menyinkronkan session server.");
   }
 
-  const result = await response.json().catch(() => null);
-  if (!result?.user) {
-    throw new Error("Profil session server tidak ditemukan.");
-  }
+  const data = await response.json();
+  return mapSessionUser(data.user);
+}
 
+async function loadProfile(): Promise<AppUser> {
+  const response = await fetchWithTimeout("/api/auth/me", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Gagal memuat profil session.");
+  }
+  const result = await response.json();
   return mapSessionUser(result.user);
 }
 
@@ -101,12 +100,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(getAuthSafe(), async (fbUser) => {
       if (fbUser) {
         try {
-          const sessionUser = await syncServerSession(fbUser);
-          setUser(sessionUser);
+          // Coba muat profil dari session cookie lebih dulu (sangat cepat).
+          // Kalau berhasil, berarti user hanya melakukan refresh halaman.
+          const profileUser = await loadProfile();
+          setUser(profileUser);
         } catch {
+          // Jika gagal (mis. belum ada cookie karena baru saja login),
+          // barulah sync idToken ke server untuk membuat session baru (lambat).
           try {
-            const profileUser = await loadProfile();
-            setUser(profileUser);
+            const sessionUser = await syncServerSession(fbUser);
+            setUser(sessionUser);
           } catch {
             setUser(null);
           }

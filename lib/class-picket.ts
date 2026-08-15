@@ -212,8 +212,7 @@ export function getMonitoringSummaryForSchedule(
   schedule: ClassPicketSchedule,
   reports: ClassPicketReportItem[]
 ) {
-  const activeClasses = schedule.classes.filter((className) => !isGraduatedClass(className));
-  const totalExpected = activeClasses.length * CLASS_PICKET_PERIODS.length;
+  const totalExpected = schedule.classes.length * CLASS_PICKET_PERIODS.length;
 
   const relevantReports = reports.filter(
     (report) => report.scheduleId === String(schedule.id) && schedule.classes.includes(report.className)

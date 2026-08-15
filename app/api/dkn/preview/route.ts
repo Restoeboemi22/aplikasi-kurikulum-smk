@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
       return {
         no: index + 1,
         studentId: student.id,
-        nis: student.nis,
+        nis: student.nis || "-",
         nisn: student.nisn || "-",
         name: student.name,
         gender: normalizeGenderLabel(student.gender),

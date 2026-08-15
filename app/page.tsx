@@ -37,33 +37,44 @@ import {
   Target,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { canAccessMenu } from "@/lib/permissions";
-import Dashboard from "./dashboard/page";
-import ClassPickupPage from "./jadwal-piket-kelas/page";
-import ReligiousPickupPage from "./jadwal-piket-keagamaan/page";
-import AISchedulePage from "./jadwal-pelajaran-ai/page";
-import TeachingJournalPage from "./jurnal-mengajar/page";
-import GuidanceBookPage from "./buku-pembinaan/page";
-import DailyExamPage from "./penilaian-uh/page";
-import AssignmentPage from "./penilaian-tugas/page";
-import MidSemesterPage from "./penilaian-sts/page";
-import FinalSemesterPage from "./penilaian-sas/page";
-import AttitudeGradePage from "./penilaian-sikap/page";
-import ReportCardPage from "./penilaian-raport/report-card-page";
-import ReportCardSASTKJPage from "./penilaian-raport-tkj-sas/page";
-import ReportCardSASTKRPage from "./penilaian-raport-tkr-sas/page";
-import CetakDKNPage from "./cetak-dkn/page";
-import StudentsPage from "./siswa/page";
-import ClassMajorPage from "./kelas-jurusan/page";
-import TeachersPage from "./guru/page";
-import SubjectsPage from "./mata-pelajaran/page";
-import CurriculumPage from "./kurikulum/page";
-import LearningToolsPage from "./kurikulum-perangkat-pembelajaran/page";
-import AssessmentToolsPage from "./kurikulum-perangkat-penilaian/page";
-import ManageAccountsPage from "./kelola-akun/page";
-import MasterNilaiPage from "./master-nilai/page";
-import TeachingObjectivesPage from "./tujuan-pembelajaran/page";
-import LaporanKetidakhadiranPage from "./laporan-ketidakhadiran/page";
+import { canAccessMenu, MenuAccessContext } from "@/lib/permissions";
+import dynamic from "next/dynamic";
+
+const PageLoader = () => (
+  <div className="flex h-[60vh] w-full items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 size={36} className="animate-spin text-pink-500" />
+      <p className="text-sm text-pink-600 font-medium animate-pulse">Memuat halaman...</p>
+    </div>
+  </div>
+);
+
+const Dashboard = dynamic(() => import("./dashboard/page"), { loading: () => <PageLoader /> });
+const ClassPickupPage = dynamic(() => import("./jadwal-piket-kelas/page"), { loading: () => <PageLoader /> });
+const ReligiousPickupPage = dynamic(() => import("./jadwal-piket-keagamaan/page"), { loading: () => <PageLoader /> });
+const AISchedulePage = dynamic(() => import("./jadwal-pelajaran-ai/page"), { loading: () => <PageLoader /> });
+const TeachingJournalPage = dynamic(() => import("./jurnal-mengajar/page"), { loading: () => <PageLoader /> });
+const GuidanceBookPage = dynamic(() => import("./buku-pembinaan/page"), { loading: () => <PageLoader /> });
+const DailyExamPage = dynamic(() => import("./penilaian-uh/page"), { loading: () => <PageLoader /> });
+const AssignmentPage = dynamic(() => import("./penilaian-tugas/page"), { loading: () => <PageLoader /> });
+const MidSemesterPage = dynamic(() => import("./penilaian-sts/page"), { loading: () => <PageLoader /> });
+const FinalSemesterPage = dynamic(() => import("./penilaian-sas/page"), { loading: () => <PageLoader /> });
+const AttitudeGradePage = dynamic(() => import("./penilaian-sikap/page"), { loading: () => <PageLoader /> });
+const ReportCardPage = dynamic(() => import("./penilaian-raport/report-card-page"), { loading: () => <PageLoader /> });
+const ReportCardSASTKJPage = dynamic(() => import("./penilaian-raport-tkj-sas/page"), { loading: () => <PageLoader /> });
+const ReportCardSASTKRPage = dynamic(() => import("./penilaian-raport-tkr-sas/page"), { loading: () => <PageLoader /> });
+const CetakDKNPage = dynamic(() => import("./cetak-dkn/page"), { loading: () => <PageLoader /> });
+const StudentsPage = dynamic(() => import("./siswa/page"), { loading: () => <PageLoader /> });
+const ClassMajorPage = dynamic(() => import("./kelas-jurusan/page"), { loading: () => <PageLoader /> });
+const TeachersPage = dynamic(() => import("./guru/page"), { loading: () => <PageLoader /> });
+const SubjectsPage = dynamic(() => import("./mata-pelajaran/page"), { loading: () => <PageLoader /> });
+const CurriculumPage = dynamic(() => import("./kurikulum/page"), { loading: () => <PageLoader /> });
+const LearningToolsPage = dynamic(() => import("./kurikulum-perangkat-pembelajaran/page"), { loading: () => <PageLoader /> });
+const AssessmentToolsPage = dynamic(() => import("./kurikulum-perangkat-penilaian/page"), { loading: () => <PageLoader /> });
+const ManageAccountsPage = dynamic(() => import("./kelola-akun/page"), { loading: () => <PageLoader /> });
+const MasterNilaiPage = dynamic(() => import("./master-nilai/master-nilai-page"), { loading: () => <PageLoader /> });
+const TeachingObjectivesPage = dynamic(() => import("./tujuan-pembelajaran/page"), { loading: () => <PageLoader /> });
+const LaporanKetidakhadiranPage = dynamic(() => import("./laporan-ketidakhadiran/page"), { loading: () => <PageLoader /> });
 import schoolLogo from "../logo SMKS PACET.png";
 
 type NavEntry = {
@@ -84,7 +95,7 @@ function isGroup(item: NavEntry): item is NavGroup {
 function filterNavEntries(
   entries: NavEntry[],
   role: "ADMIN" | "TEACHER",
-  menuAccessContext: { isHomeroomTeacher: boolean }
+  menuAccessContext: MenuAccessContext
 ): NavEntry[] {
   return entries
     .map((item) => {
@@ -136,6 +147,7 @@ export default function Home() {
   const displayName = user?.name?.toUpperCase() ?? "GURU";
   const menuAccessContext = {
     isHomeroomTeacher: user?.isHomeroomTeacher ?? false,
+    homeroomClassNames: user?.homeroomClassNames ?? [],
   };
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -150,12 +162,6 @@ export default function Home() {
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
-
-  useEffect(() => {
-  }, [activeTab, loading, user]);
-
-  useEffect(() => {
-  }, [activeTab, role, user]);
 
   useEffect(() => {
     const parentGroups = findAncestorGroups(navItems, activeTab) ?? [];
@@ -271,6 +277,13 @@ export default function Home() {
   // dan sembunyikan grup bila tak ada anak yang tersisa.
   const navItems = filterNavEntries(allNavItems, role, menuAccessContext);
 
+  useEffect(() => {
+    if (activeTab === "dashboard") return;
+    if (!canAccessMenu(role, activeTab, menuAccessContext)) {
+      setActiveTab("dashboard");
+    }
+  }, [activeTab, role, menuAccessContext.isHomeroomTeacher, user?.homeroomClassNames?.join("|")]);
+
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
@@ -324,7 +337,12 @@ export default function Home() {
       case "kelola-akun":
         return <ManageAccountsPage />;
       case "master-nilai":
-        return <MasterNilaiPage />;
+        return (
+          <MasterNilaiPage
+            allowedClassNames={role === "TEACHER" ? menuAccessContext.homeroomClassNames : undefined}
+            mode={role === "TEACHER" ? "homeroom" : "admin"}
+          />
+        );
       case "tujuan-pembelajaran":
         return <TeachingObjectivesPage />;
       default:
@@ -457,12 +475,19 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-fuchsia-50">
+    <div className="flex h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-fuchsia-50 relative overflow-hidden">
+      {/* Overlay for mobile */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 sm:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       {/* Sidebar */}
       <aside
         className={`${
-          sidebarOpen ? "w-64" : "w-20"
-        } bg-primary-900 text-white transition-all duration-300 flex flex-col`}
+          sidebarOpen ? "w-64" : "w-0 sm:w-20"
+        } bg-primary-900 text-white transition-all duration-300 flex flex-col z-50 overflow-hidden shrink-0 absolute sm:relative h-full`}
       >
         <div className="p-6 flex items-center justify-between" suppressHydrationWarning>
           <div className={`${!sidebarOpen && "hidden"}`}>
@@ -474,18 +499,18 @@ export default function Home() {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 bg-primary-900">
+        <nav className="flex-1 px-3 py-4 space-y-1 bg-primary-900 overflow-y-auto">
           {navItems.map((item) => (
             <NavItem key={item.id} item={item} />
           ))}
         </nav>
 
-        <div className="p-4 border-t border-primary-800 bg-primary-900" suppressHydrationWarning>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary-700 flex items-center justify-center">
+        <div className="p-4 border-t border-primary-800 bg-primary-900 shrink-0" suppressHydrationWarning>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-full bg-primary-700 flex items-center justify-center shrink-0">
               {user.role === "ADMIN" ? <Shield size={20} /> : <Users size={20} />}
             </div>
-            {isClient && sidebarOpen && (
+            {sidebarOpen && (
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{user.name}</p>
                 <p className="text-xs text-primary-300">
@@ -493,24 +518,33 @@ export default function Home() {
                 </p>
               </div>
             )}
-            {isClient && sidebarOpen && (
-              <button
-                onClick={logout}
-                title="Keluar"
-                className="p-2 rounded-lg hover:bg-primary-800 text-primary-200"
-              >
-                <LogOut size={18} />
-              </button>
-            )}
           </div>
+          <button
+            type="button"
+            onClick={logout}
+            title="Logout"
+            aria-label="Logout"
+            className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-500/20 hover:text-white transition-colors ${
+              sidebarOpen ? "" : "justify-center"
+            }`}
+          >
+            <LogOut size={18} />
+            {sidebarOpen && <span>Logout</span>}
+          </button>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-gradient-to-r from-pink-100 via-rose-100 to-fuchsia-100 border-b border-pink-200 px-6 py-4 flex items-center justify-between">
+        <header className="bg-gradient-to-r from-pink-100 via-rose-100 to-fuchsia-100 border-b border-pink-200 px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg hover:bg-pink-200/60 text-pink-600 sm:hidden"
+            >
+              <Menu size={24} />
+            </button>
             <h2 className="text-2xl font-bold text-pink-700">
               {activeLabel}
             </h2>
@@ -526,6 +560,16 @@ export default function Home() {
             </div>
             <button className="p-2 rounded-full hover:bg-pink-200/60 text-pink-500">
               <Bell size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              title="Logout"
+              aria-label="Logout"
+              className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-100 transition-colors"
+            >
+              <LogOut size={18} />
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </header>

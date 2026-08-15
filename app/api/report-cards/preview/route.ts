@@ -115,6 +115,16 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+    const classLocationSupplement = student.className
+      ? await prisma.reportCardSupplement.findFirst({
+          where: {
+            className: student.className,
+            academicYear,
+            semester,
+          },
+          orderBy: [{ updatedAt: "desc" }],
+        })
+      : null;
 
     const grades = await prisma.grade.findMany({
       where: {
@@ -233,7 +243,7 @@ export async function GET(request: NextRequest) {
       student: {
         id: student.id,
         name: student.name,
-        nis: student.nis,
+        nis: student.nis || "-",
         nisn: student.nisn || "-",
         className: student.className || "-",
         phase: getPhaseFromClassLevel(classMajor?.grade || student.className?.split(" ")[0] || null),
@@ -282,8 +292,8 @@ export async function GET(request: NextRequest) {
             ? "Belum ada data nilai untuk semester ini."
             : "Lengkapi absensi, kepribadian, pengembangan diri, dan catatan wali untuk menyempurnakan raport."),
         location: {
-          city: supplement?.reportCity ?? "Pacet",
-          date: supplement?.reportDate ?? "",
+          city: supplement?.reportCity || classLocationSupplement?.reportCity || "Pacet",
+          date: supplement?.reportDate || classLocationSupplement?.reportDate || "",
         },
         signatures: {
           homeroom: {

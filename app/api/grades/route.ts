@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const subject = searchParams.get('subject');
     const semester = searchParams.get('semester');
     const className = searchParams.get('className');
+    const viewerScope = searchParams.get('viewerScope');
 
     const filters: any = {};
     if (classLevel) filters.classLevel = classLevel;
@@ -41,6 +42,11 @@ export async function GET(request: NextRequest) {
         },
         include: {
           teachingAssignments: true,
+          homeroomClasses: {
+            select: {
+              className: true,
+            },
+          },
         },
       });
 
@@ -51,7 +57,33 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      filters.teacherId = teacher.id;
+      const homeroomClassNames = teacher.homeroomClasses.map((item) => item.className.trim().toUpperCase());
+
+      if (viewerScope === 'homeroom-summary') {
+        if (homeroomClassNames.length === 0) {
+          return NextResponse.json(
+            { error: 'Menu Master Nilai hanya dapat diakses oleh guru yang menjadi wali kelas.' },
+            { status: 403 }
+          );
+        }
+
+        if (!className) {
+          return NextResponse.json(
+            { error: 'Kelas wali wajib dipilih untuk menampilkan Master Nilai.' },
+            { status: 400 }
+          );
+        }
+
+        const requestedClassName = className.trim().toUpperCase();
+        if (!homeroomClassNames.includes(requestedClassName)) {
+          return NextResponse.json(
+            { error: 'Anda tidak memiliki akses ke kelas tersebut.' },
+            { status: 403 }
+          );
+        }
+      } else {
+        filters.teacherId = teacher.id;
+      }
     }
 
     const grades = await prisma.grade.findMany({

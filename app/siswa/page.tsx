@@ -133,17 +133,18 @@ export default function StudentsPage() {
   };
 
   const handleSaveStudent = async () => {
+    const normalizedNis = formData.nis.trim();
     const normalizedNisn = normalizeDigits(formData.nisn || "");
 
-    if (!formData.nis || !formData.name) {
-      alert("NIS dan nama wajib diisi!");
+    if (!formData.name.trim()) {
+      alert("Nama wajib diisi!");
       return;
     }
 
     setIsSaving(true);
     try {
       const method = isEditing ? "PUT" : "POST";
-      const payload = { ...formData, nisn: normalizedNisn };
+      const payload = { ...formData, nis: normalizedNis, nisn: normalizedNisn };
       const body = isEditing ? { id: editingId, ...payload } : payload;
       
       const res = await fetch("/api/students", {
@@ -340,7 +341,7 @@ export default function StudentsPage() {
             row["No HP"] || row["No. HP"] || row["Telepon"] || row["phone"]
           ),
           email: normalizeCellText(row["Email"] || row["email"]),
-        })).filter((student: any) => student.name && student.nis);
+        })).filter((student: any) => student.name);
 
         if (importedStudents.length > 0) {
           let successCount = 0;
@@ -417,7 +418,7 @@ export default function StudentsPage() {
             success: 0,
             failed: 0,
             currentName: "",
-            message: "Tidak ada data valid yang bisa diimport. Pastikan NIS dan nama terisi.",
+            message: "Tidak ada data valid yang bisa diimport. Pastikan nama terisi.",
             failedReasons: [],
           });
         }
@@ -640,7 +641,7 @@ export default function StudentsPage() {
                       className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                   </td>
-                  <td className="px-6 py-4 text-gray-700">{student.nis}</td>
+                  <td className="px-6 py-4 text-gray-700">{student.nis || "-"}</td>
                   <td className="px-6 py-4 text-gray-700">{student.nisn || "-"}</td>
                   <td className="px-6 py-4">
                     <span className="font-medium text-gray-800">{student.name}</span>
@@ -703,6 +704,7 @@ export default function StudentsPage() {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   placeholder="Nomor Induk Siswa"
                 />
+                <p className="mt-1 text-xs text-gray-500">Opsional, bisa dikosongkan bila belum ada.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">NISN</label>
@@ -843,7 +845,7 @@ export default function StudentsPage() {
                 <tbody>
                   <tr className="bg-slate-50">
                     <td className="px-4 py-3 text-sm font-semibold text-slate-600">NIS</td>
-                    <td className="px-4 py-3 text-sm text-slate-900">{selectedStudent.nis}</td>
+                    <td className="px-4 py-3 text-sm text-slate-900">{selectedStudent.nis || "-"}</td>
                   </tr>
                   <tr>
                     <td className="px-4 py-3 text-sm font-semibold text-slate-600">NISN</td>

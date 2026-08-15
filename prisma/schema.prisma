@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
@@ -127,7 +128,7 @@ model ClassMajor {
 
 model Student {
   id          String    @id @default(cuid())
-  nis         String    @unique
+  nis         String?   @unique
   nisn        String?
   name        String
   gender      String?
