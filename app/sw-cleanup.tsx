@@ -19,26 +19,22 @@ export default function ServiceWorkerCleanup() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Unregister semua service worker.
+    // 1. Unregister semua service worker yang masih aktif di browser
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .getRegistrations()
         .then((registrations) => {
           registrations.forEach((reg) => reg.unregister());
         })
-        .catch(() => {
-          /* abaikan: tidak kritis */
-        });
+        .catch(() => {});
     }
 
-    // 2. Hapus semua cache lama (Cache Storage API).
+    // 2. Hapus semua cache penyimpanan browser lama (Cache Storage API)
     if ("caches" in window) {
       caches
         .keys()
         .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-        .catch(() => {
-          /* abaikan: tidak kritis */
-        });
+        .catch(() => {});
     }
   }, []);
 
