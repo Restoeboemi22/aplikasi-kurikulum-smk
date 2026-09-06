@@ -156,6 +156,9 @@ export default function Home() {
 
   useEffect(() => {
     setIsClient(true);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
   }, []);
 
   // Gate: belum login -> ke halaman login.
@@ -450,6 +453,9 @@ export default function Home() {
             setExpandedMenus([parentId]);
           } else {
             setExpandedMenus([]);
+          }
+          if (typeof window !== "undefined" && window.innerWidth < 768) {
+            setSidebarOpen(false);
           }
         }}
         className={`w-full flex items-center rounded-xl border px-4 py-2.5 text-sm transition-all ${

@@ -980,69 +980,73 @@ export default function ClassPickupPage() {
           </div>
 
           <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-            <table className="w-full">
-              <thead className="border-b bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Hari</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru Piket</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
-                    Kelas Yang Ditanggung
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Waktu Check In</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Status</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Catatan</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {monitoringRows.map(({ item, summary }) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-600">{item.day}</td>
-                    <td className="px-6 py-4 font-medium text-gray-800">{item.teacherName}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.classes.join(", ")}</td>
-                    <td className="px-6 py-4 text-gray-600">{formatMonitoringTime(summary.latestUpdatedAt)}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getMonitoringStatusColor(
-                          summary.status
-                        )}`}
-                      >
-                        {getMonitoringStatusIcon(summary.status)}
-                        {summary.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{summary.noteSummary}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setViewingScheduleId(String(item.id))}
-                          className="rounded-lg p-2 hover:bg-gray-100"
-                          title="Lihat"
-                        >
-                          <Eye size={16} className="text-gray-600" />
-                        </button>
-                        <button
-                          onClick={() => handleEditSchedule(item)}
-                          className="rounded-lg p-2 hover:bg-blue-100"
-                          title="Edit"
-                        >
-                          <Edit size={16} className="text-blue-600" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {monitoringRows.length === 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[750px]">
+                <thead className="border-b bg-gray-50">
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
-                      {loadingSchedules || loadingReports
-                        ? "Memuat monitoring piket kelas..."
-                        : "Belum ada jadwal piket kelas untuk filter yang dipilih."}
-                    </td>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Hari</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru Piket</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                      Kelas Yang Ditanggung
+                    </th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600 whitespace-nowrap">Waktu Check In</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Status</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Catatan</th>
+                    <th className="sticky right-0 z-10 bg-gray-50 px-4 md:px-6 py-4 text-right text-sm font-semibold text-gray-600 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                      Aksi
+                    </th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {monitoringRows.map(({ item, summary }) => (
+                    <tr key={item.id} className="group hover:bg-gray-50">
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.day}</td>
+                      <td className="px-4 md:px-6 py-4 font-medium text-gray-800">{item.teacherName}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.classes.join(", ")}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600 whitespace-nowrap">{formatMonitoringTime(summary.latestUpdatedAt)}</td>
+                      <td className="px-4 md:px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${getMonitoringStatusColor(
+                            summary.status
+                          )}`}
+                        >
+                          {getMonitoringStatusIcon(summary.status)}
+                          {summary.status}
+                        </span>
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{summary.noteSummary}</td>
+                      <td className="sticky right-0 z-10 bg-white group-hover:bg-gray-50 px-4 md:px-6 py-4 text-right shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] transition-colors">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setViewingScheduleId(String(item.id))}
+                            className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 transition"
+                            title="Lihat"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleEditSchedule(item)}
+                            className="rounded-lg p-2 text-blue-600 hover:bg-blue-100 transition"
+                            title="Edit"
+                          >
+                            <Edit size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {monitoringRows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
+                        {loadingSchedules || loadingReports
+                          ? "Memuat monitoring piket kelas..."
+                          : "Belum ada jadwal piket kelas untuk filter yang dipilih."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -1264,60 +1268,64 @@ export default function ClassPickupPage() {
           </div>
 
           <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-            <table className="w-full">
-              <thead className="border-b bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Tahun</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Bulan</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Minggu</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Hari</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru Piket</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-600">
-                    Kelas Yang Ditanggung
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-600">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {createdSchedules.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-gray-600">{item.year}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.month}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.week}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.day}</td>
-                    <td className="px-6 py-4 font-medium text-gray-800">{item.teacherName}</td>
-                    <td className="px-6 py-4 text-gray-600">{item.classes.join(", ")}</td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEditSchedule(item)}
-                          className="rounded-lg p-2 hover:bg-blue-100"
-                          title="Edit"
-                        >
-                          <Edit size={16} className="text-blue-600" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSchedule(item.id)}
-                          className="rounded-lg p-2 hover:bg-red-100"
-                          title="Hapus"
-                        >
-                          <Trash2 size={16} className="text-red-600" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {createdSchedules.length === 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[750px]">
+                <thead className="border-b bg-gray-50">
                   <tr>
-                    <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
-                      {loadingSchedules
-                        ? "Memuat jadwal piket kelas..."
-                        : "Belum ada jadwal piket kelas yang dibuat."}
-                    </td>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Tahun</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Bulan</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Minggu</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Hari</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">Guru Piket</th>
+                    <th className="px-4 md:px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                      Kelas Yang Ditanggung
+                    </th>
+                    <th className="sticky right-0 z-10 bg-gray-50 px-4 md:px-6 py-4 text-right text-sm font-semibold text-gray-600 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                      Aksi
+                    </th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {createdSchedules.map((item) => (
+                    <tr key={item.id} className="group hover:bg-gray-50">
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.year}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.month}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.week}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.day}</td>
+                      <td className="px-4 md:px-6 py-4 font-medium text-gray-800">{item.teacherName}</td>
+                      <td className="px-4 md:px-6 py-4 text-gray-600">{item.classes.join(", ")}</td>
+                      <td className="sticky right-0 z-10 bg-white group-hover:bg-gray-50 px-4 md:px-6 py-4 text-right shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.06)] transition-colors">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEditSchedule(item)}
+                            className="rounded-lg p-2 text-blue-600 hover:bg-blue-100 transition"
+                            title="Edit"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSchedule(item.id)}
+                            className="rounded-lg p-2 text-red-600 hover:bg-red-100 transition"
+                            title="Hapus"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {createdSchedules.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
+                        {loadingSchedules
+                          ? "Memuat jadwal piket kelas..."
+                          : "Belum ada jadwal piket kelas yang dibuat."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
