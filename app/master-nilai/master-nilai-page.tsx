@@ -85,7 +85,7 @@ const hitungRataRata = (vals: (string | null)[]): number | null => {
 const toExcelNumber = (value: string | number | null | undefined): number | string => {
   if (value === null || value === undefined) return "";
   const text = String(value).trim();
-  if (!text) return "";
+  if (!text || text === "-" || text === "–") return "";
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : text;
 };
@@ -364,8 +364,8 @@ export default function MasterNilaiPage({
         { title: "NO", key: "no", width: 6 },
         { title: "NIS", key: "nis", width: 14 },
         { title: "NISN", key: "nisn", width: 16 },
-        { title: "NAMA SISWA", key: "nama", width: 28 },
-        { title: "L/P", key: "gender", width: 10 },
+        { title: "NAMA SISWA", key: "nama", width: 30 },
+        { title: "L/P", key: "gender", width: 12 },
       ];
       const subjectLeafColumns = [
         { title: "1", width: 8, highlight: false },
@@ -510,7 +510,7 @@ export default function MasterNilaiPage({
         );
 
         const row = worksheet.getRow(rowIndex);
-        row.values = [null, ...rowValues];
+        row.values = rowValues;
         row.height = 20;
 
         for (let col = 1; col <= totalColumnCount; col++) {
