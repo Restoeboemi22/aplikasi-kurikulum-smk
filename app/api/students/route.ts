@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     const student = await prisma.student.create({
       data: { 
-        nis: normalizeText(nis) || null,
+        nis: normalizeText(nis),
         nisn: normalizeNisn(nisn) || null,
         name: normalizeText(name),
         gender: normalizeText(gender) || null,
@@ -172,7 +172,7 @@ export async function PUT(request: NextRequest) {
     const student = await prisma.student.update({
       where: { id },
       data: { 
-        nis: normalizeText(nis) || null,
+        nis: normalizeText(nis),
         nisn: normalizeNisn(nisn) || null,
         name: normalizeText(name),
         gender: normalizeText(gender) || null,
