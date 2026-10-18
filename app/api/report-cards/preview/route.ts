@@ -10,6 +10,7 @@ import {
   getPhaseFromClassLevel,
   getReportGroup,
   isBKSubject,
+  isExcludedFromReport,
   isMatchingGrade,
   matchesReportMajorCode,
   resolveReportViewerAccess,
@@ -134,8 +135,8 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // 2. Exclude BK (Bimbingan Konseling) from report card
-    const reportDbSubjects = dbSubjects.filter((s) => !isBKSubject(s));
+    // 2. Exclude BK and MPP (Mata Pelajaran Pilihan) from report card
+    const reportDbSubjects = dbSubjects.filter((s) => !isExcludedFromReport(s));
 
     // 3. Sort subjects according to curriculum standard (Group A first, then Group B)
     const sortedDbSubjects = sortReportSubjects(reportDbSubjects);
@@ -149,20 +150,21 @@ export async function GET(request: NextRequest) {
       orderBy: [{ subject: "asc" }, { jenisPenilaian: "asc" }],
     });
 
-    // Filter out any BK grades from student grades
-    const nonBKGrades = grades.filter((g) => !isBKSubject(g.subject));
+    // Filter out any excluded grades (BK, MPP) from student grades
+    const nonExcludedGrades = grades.filter((g) => !isExcludedFromReport(g.subject));
 
     // 5. Build subject list:
     // Primary list comes from database subjects.
-    // If student has grades in nonBKGrades for a subject not currently in database,
-    // also include it so teacher input is never lost.
+    // If student has grades in nonExcludedGrades for a subject not currently in database,
+    // also include it so teacher input is never lost (unless excluded).
     const subjectList: Array<{ code: string; name: string }> = sortedDbSubjects.map((s) => ({
       code: s.code,
       name: s.name,
     }));
 
     const extraSubjects = new Map<string, { code: string; name: string }>();
-    nonBKGrades.forEach((g) => {
+    nonExcludedGrades.forEach((g) => {
+      if (isExcludedFromReport(g.subject)) return;
       const matchesAny = subjectList.some((s) => isMatchingGrade(g.subject, s));
       if (!matchesAny && !extraSubjects.has(g.subject)) {
         extraSubjects.set(g.subject, {
@@ -178,9 +180,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 6. Map grades to subjects
-    const subjectGradesMap = new Map<string, typeof nonBKGrades>();
+    const subjectGradesMap = new Map<string, typeof nonExcludedGrades>();
     subjectList.forEach((subject) => {
-      const matched = nonBKGrades.filter((g) => isMatchingGrade(g.subject, subject));
+      const matched = nonExcludedGrades.filter((g) => isMatchingGrade(g.subject, subject));
       subjectGradesMap.set(subject.name, matched);
     });
 
@@ -281,6 +283,14 @@ export async function GET(request: NextRequest) {
       },
       []
     );
+
+    // Pastikan urutan Kelompok A lalu Kelompok B, dan nomor urut tiap kelompok dimulai dari 1
+    groupedRows.sort((a, b) => a.code.localeCompare(b.code));
+    groupedRows.forEach((group) => {
+      group.items.forEach((item, itemIdx) => {
+        item.no = itemIdx + 1;
+      });
+    });
 
     const numericScores = rows
       .map((row) => row.roundedScore)

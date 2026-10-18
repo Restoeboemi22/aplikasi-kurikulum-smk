@@ -19,5 +19,4 @@ export const DEFAULT_SUBJECTS: DefaultSubject[] = [
   { code: "KK", name: "Konsentrasi Keahlian" },
   { code: "PKK", name: "Projek Kreatif dan Kewirausahaan" },
   { code: "PKL", name: "Praktik Kerja Lapangan" },
-  { code: "MPP", name: "Mata Pelajaran pilihan" },
 ];

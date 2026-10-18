@@ -116,13 +116,6 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     orderLabel: "15",
     group: "KEJURUAN",
   },
-  {
-    name: "Mata Pelajaran pilihan",
-    headerLabel: "Mapel Pilihan",
-    shortLabel: "Pilihan",
-    orderLabel: "16",
-    group: "KEJURUAN",
-  },
 ];
 
 export const DKN_CRITERIA = {

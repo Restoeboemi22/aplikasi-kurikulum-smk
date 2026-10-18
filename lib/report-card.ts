@@ -16,13 +16,29 @@ export const REPORT_SUBJECT_GROUPS: Record<"A" | "B", ReportGroup> = {
   },
   B: {
     code: "B",
-    name: "Mata Pelajaran Kejuruan",
+    name: "Kelompok Mata Pelajaran Kejuruan",
   },
 };
 
 export const CANONICAL_SUBJECT_CODES = [
-  "PABP", "PARP", "PAI", "PAK", "PPS", "PKN", "PPKN", "BIN", "PJOK", "SEJ", "SBD", "BSJ", "MULOK", "MTK", "BIG",
-  "INF", "IPAS", "DDPK", "KK", "PKK", "PKL", "MPP",
+  // Kelompok A (Umum): 1 - 7
+  "PABP", "PARP", "PAI", "PAK",
+  "PPS", "PKN", "PPKN",
+  "BIN",
+  "PJOK",
+  "SEJ",
+  "SBD",
+  "BSJ", "MULOK",
+
+  // Kelompok B (Kejuruan): 1 - 8
+  "MTK",
+  "BIG",
+  "INF",
+  "IPAS",
+  "DDPK",
+  "KK",
+  "PKK",
+  "PKL",
 ];
 
 const subjectOrder = new Map<string, number>();
@@ -132,17 +148,26 @@ export function matchesReportMajorCode(
   return false;
 }
 
-export function isBKSubject(
+export function isExcludedFromReport(
   subject?: { code?: string | null; name?: string | null } | string | null
 ): boolean {
   if (!subject) return false;
   const code = (typeof subject === "string" ? "" : subject.code || "").trim().toUpperCase();
   const name = (typeof subject === "string" ? subject : subject.name || "").trim().toLowerCase();
 
-  if (code === "BK") return true;
-  if (name === "bk") return true;
-  if (name.includes("bimbingan konseling") || name.includes("bimbingan dan konseling")) return true;
+  // Exclude BK (Bimbingan Konseling)
+  if (code === "BK" || name === "bk" || name.includes("bimbingan")) return true;
+
+  // Exclude Mata Pelajaran Pilihan (MPP) sesuai instruksi kurikulum sekolah
+  if (code === "MPP" || name.includes("pilihan")) return true;
+
   return false;
+}
+
+export function isBKSubject(
+  subject?: { code?: string | null; name?: string | null } | string | null
+): boolean {
+  return isExcludedFromReport(subject);
 }
 
 export function getReportGroup(
@@ -152,8 +177,9 @@ export function getReportGroup(
   const code = (subjectCode || "").trim().toUpperCase();
   const name = (subjectName || "").trim().toLowerCase();
 
+  // Kelompok A (Kelompok Mata Pelajaran Umum): 1 - 7
   const groupACodes = [
-    "PABP", "PARP", "PAI", "PAK", "PPS", "PPKN", "PKN", "BIN", "PJOK", "SEJ", "SBD", "BSJ", "MULOK", "MTK", "BIG",
+    "PABP", "PARP", "PAI", "PAK", "PPS", "PPKN", "PKN", "BIN", "PJOK", "SEJ", "SBD", "BSJ", "MULOK",
   ];
   if (groupACodes.includes(code)) {
     return REPORT_SUBJECT_GROUPS.A;
@@ -182,14 +208,13 @@ export function getReportGroup(
     "sastra jawa",
     "muatan lokal",
     "mulok",
-    "matematika",
-    "bahasa inggris",
   ];
 
   if (groupAKeywords.some((kw) => name.includes(kw))) {
     return REPORT_SUBJECT_GROUPS.A;
   }
 
+  // Semua mapel kejuruan termasuk Matematika & Bahasa Inggris masuk Kelompok B
   return REPORT_SUBJECT_GROUPS.B;
 }
 
