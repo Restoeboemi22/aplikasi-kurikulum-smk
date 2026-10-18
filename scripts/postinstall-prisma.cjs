@@ -1,11 +1,6 @@
 const { spawnSync } = require("node:child_process");
 
-const hasPrismaDbUrl = Boolean(process.env.POSTGRES_PRISMA_URL);
-
-if (!hasPrismaDbUrl) {
-  console.log("Skipping Prisma generate: POSTGRES_PRISMA_URL is not set.");
-  process.exit(0);
-}
+process.env.POSTGRES_PRISMA_URL = process.env.POSTGRES_PRISMA_URL || process.env.DATABASE_URL || "postgresql://dummy:dummy@localhost:5432/dummy";
 
 const result = spawnSync("npx", ["prisma", "generate"], {
   stdio: "inherit",

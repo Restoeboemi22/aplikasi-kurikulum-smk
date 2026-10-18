@@ -1,4 +1,4 @@
-export const SESSION_COOKIE_NAME = "kurikulum_session";
+export const SESSION_COOKIE_NAME = "__session";
 
 export function getSessionSecret() {
   return (
