@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireRole, requireSession } from '@/lib/server-session';
 import { DEFAULT_SUBJECTS } from '@/lib/default-subjects';
-import { getSubjectGroup, sortSubjectsWithGroup } from '@/lib/subject-groups';
+import {
+  getSubjectGroup,
+  sortSubjectsWithGroup,
+  isSubjectActiveInLevel,
+  parseSubjectLevels,
+} from '@/lib/subject-groups';
 
 export async function GET(request: NextRequest) {
   try {
     requireSession(request);
+    const { searchParams } = new URL(request.url);
+    const levelFilter = searchParams.get('level');
+
     const subjects = await prisma.subject.findMany({
       orderBy: { name: 'asc' }
     });
@@ -14,15 +22,22 @@ export async function GET(request: NextRequest) {
     const sortedSubjects = sortSubjectsWithGroup(subjects);
     const enriched = sortedSubjects.map((s) => {
       const grp = getSubjectGroup(s.name, s.code);
+      const levels = s.levels || "X,XI,XII";
       return {
         ...s,
+        levels,
+        parsedLevels: parseSubjectLevels(levels),
         groupCode: grp.code,
         groupName: grp.name,
         badgeLabel: grp.badgeLabel,
       };
     });
 
-    return NextResponse.json(enriched);
+    const result = levelFilter && levelFilter !== "ALL"
+      ? enriched.filter((s) => isSubjectActiveInLevel(s.levels, levelFilter))
+      : enriched;
+
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Session login tidak valid.' }, { status: 401 });
@@ -39,7 +54,7 @@ export async function POST(request: NextRequest) {
   try {
     requireRole(request, ['ADMIN']);
     const body = await request.json();
-    const { code, name, defaults } = body;
+    const { code, name, levels, defaults } = body;
 
     if (defaults) {
       const result = await prisma.subject.createMany({
@@ -61,8 +76,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const formattedLevels = Array.isArray(levels)
+      ? levels.join(',')
+      : (typeof levels === 'string' && levels.trim() ? levels.trim() : 'X,XI,XII');
+
     const subject = await prisma.subject.create({
-      data: { code, name }
+      data: { code, name, levels: formattedLevels }
     });
     
     return NextResponse.json(subject, { status: 201 });
@@ -85,7 +104,7 @@ export async function PUT(request: NextRequest) {
   try {
     requireRole(request, ['ADMIN']);
     const body = await request.json();
-    const { id, code, name } = body;
+    const { id, code, name, levels } = body;
     
     if (!id || !code || !name) {
       return NextResponse.json(
@@ -105,9 +124,16 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const updateData: { code: string; name: string; levels?: string } = { code, name };
+    if (levels !== undefined) {
+      updateData.levels = Array.isArray(levels)
+        ? levels.join(',')
+        : (typeof levels === 'string' && levels.trim() ? levels.trim() : 'X,XI,XII');
+    }
+
     const subject = await prisma.subject.update({
       where: { id },
-      data: { code, name }
+      data: updateData
     });
 
     // Synchronize subject name change across existing operational records

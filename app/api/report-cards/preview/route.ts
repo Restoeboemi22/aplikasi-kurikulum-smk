@@ -18,6 +18,7 @@ import {
   sortSubjects,
 } from "@/lib/report-card";
 import { getReportProfile } from "@/lib/report-profiles";
+import { extractClassLevel, isSubjectActiveInLevel } from "@/lib/subject-groups";
 
 type ReportGradeType = "UH" | "TUGAS" | "STS" | "SAS" | "SIKAP";
 
@@ -135,10 +136,17 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    // 2. Exclude BK and MPP (Mata Pelajaran Pilihan) from report card
-    const reportDbSubjects = dbSubjects.filter((s) => !isExcludedFromReport(s));
+    // 2. Determine student's class level (X, XI, or XII)
+    const studentClassLevel = (classMajor?.grade || extractClassLevel(student.className)) as string | null;
 
-    // 3. Sort subjects according to curriculum standard (Group A first, then Group B)
+    // 3. Filter subjects that apply to this student's class level and exclude non-report subjects (BK, MPP)
+    const reportDbSubjects = dbSubjects.filter((s) => {
+      if (isExcludedFromReport(s)) return false;
+      if (!studentClassLevel) return true;
+      return isSubjectActiveInLevel(s.levels, studentClassLevel);
+    });
+
+    // 4. Sort subjects according to curriculum standard (Group A first, then Group B)
     const sortedDbSubjects = sortReportSubjects(reportDbSubjects);
 
     // 4. Fetch grades for student in this semester

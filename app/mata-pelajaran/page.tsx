@@ -20,12 +20,17 @@ import {
   SUBJECT_GROUPS,
   sortSubjectsWithGroup,
   type SubjectGroupCode,
+  type ClassLevel,
+  parseSubjectLevels,
+  isSubjectActiveInLevel,
 } from "@/lib/subject-groups";
 
 interface Subject {
   id: string;
   code: string;
   name: string;
+  levels?: string;
+  parsedLevels?: ClassLevel[];
   groupCode?: SubjectGroupCode;
   groupName?: string;
   badgeLabel?: string;
@@ -42,10 +47,16 @@ export default function SubjectsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedLevelFilter, setSelectedLevelFilter] = useState<"ALL" | ClassLevel>("ALL");
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<"ALL" | SubjectGroupCode>("ALL");
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    code: string;
+    name: string;
+    levels: ClassLevel[];
+  }>({
     code: "",
     name: "",
+    levels: ["X", "XI", "XII"],
   });
 
   useEffect(() => {
@@ -57,7 +68,7 @@ export default function SubjectsPage() {
     try {
       const res = await fetch("/api/subjects");
       if (res.ok) {
-        const data = await res.json();
+        const data: Subject[] = await res.json();
         setSubjects(data);
       }
     } catch (error) {
@@ -72,11 +83,17 @@ export default function SubjectsPage() {
       alert("Kode dan nama mata pelajaran wajib diisi");
       return;
     }
+    if (formData.levels.length === 0) {
+      alert("Pilih minimal satu jenjang kelas (X, XI, atau XII)");
+      return;
+    }
 
     setIsSaving(true);
     try {
       const method = isEditing ? "PUT" : "POST";
-      const body = isEditing ? { id: editingId, ...formData } : formData;
+      const body = isEditing
+        ? { id: editingId, ...formData, levels: formData.levels.join(",") }
+        : { ...formData, levels: formData.levels.join(",") };
 
       const res = await fetch("/api/subjects", {
         method,
@@ -108,7 +125,7 @@ export default function SubjectsPage() {
   const handleSeedDefaults = async () => {
     if (
       !confirm(
-        "Isi daftar mata pelajaran default (15 mapel sesuai kurikulum resmi SMKS Pacet)?"
+        "Isi daftar mata pelajaran default (16 mapel sesuai struktur kurikulum resmi SMKS Pacet & pembagian jenjang X, XI, XII)?"
       )
     )
       return;
@@ -147,7 +164,12 @@ export default function SubjectsPage() {
 
   const handleEditSubject = (subject: Subject) => {
     setEditingId(subject.id);
-    setFormData({ code: subject.code, name: subject.name });
+    const parsed = subject.parsedLevels || parseSubjectLevels(subject.levels);
+    setFormData({
+      code: subject.code,
+      name: subject.name,
+      levels: parsed,
+    });
     setIsEditing(true);
     setIsDialogOpen(true);
   };
@@ -174,15 +196,27 @@ export default function SubjectsPage() {
   };
 
   const resetForm = () => {
-    setFormData({ code: "", name: "" });
+    setFormData({ code: "", name: "", levels: ["X", "XI", "XII"] });
     setIsEditing(false);
     setEditingId(null);
     setIsDialogOpen(false);
   };
 
-  // Group and sort subjects
+  // Level counts across all subjects
+  const countX = subjects.filter((s) => isSubjectActiveInLevel(s.levels, "X")).length;
+  const countXI = subjects.filter((s) => isSubjectActiveInLevel(s.levels, "XI")).length;
+  const countXII = subjects.filter((s) => isSubjectActiveInLevel(s.levels, "XII")).length;
+  const totalCount = subjects.length;
+
+  // Subjects filtered by selected class level tab
+  const levelFilteredSubjects = useMemo(() => {
+    if (selectedLevelFilter === "ALL") return subjects;
+    return subjects.filter((s) => isSubjectActiveInLevel(s.levels, selectedLevelFilter));
+  }, [subjects, selectedLevelFilter]);
+
+  // Group and sort level-filtered subjects
   const groupedData = useMemo(() => {
-    const sorted = sortSubjectsWithGroup(subjects);
+    const sorted = sortSubjectsWithGroup(levelFilteredSubjects);
     const groups: Record<SubjectGroupCode, Subject[]> = {
       A: [],
       B: [],
@@ -200,9 +234,9 @@ export default function SubjectsPage() {
     });
 
     return groups;
-  }, [subjects]);
+  }, [levelFilteredSubjects]);
 
-  // Filtered by search and tab
+  // Filtered by search and group tab
   const filteredGroups = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     const result: Array<{
@@ -242,7 +276,7 @@ export default function SubjectsPage() {
   const countA = groupedData.A.length;
   const countB = groupedData.B.length;
   const countBK = groupedData.BK.length;
-  const totalCount = subjects.length;
+  const currentLevelTotal = levelFilteredSubjects.length;
 
   const detectedGroupInForm = useMemo(() => {
     if (!formData.name && !formData.code) return null;
@@ -257,11 +291,11 @@ export default function SubjectsPage() {
           <div className="flex items-center gap-2">
             <h3 className="text-xl font-bold text-gray-800">Data Mata Pelajaran</h3>
             <span className="rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-800">
-              {totalCount} Mapel
+              {totalCount} Mapel Terdaftar
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Dikelompokkan sesuai kurikulum resmi SMKS Pacet & tersinkronisasi dengan cetak raport
+            Dikelompokkan sesuai kurikulum resmi SMKS Pacet & tersinkronisasi otomatis per jenjang kelas X, XI, XII
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -269,7 +303,7 @@ export default function SubjectsPage() {
             onClick={handleSeedDefaults}
             disabled={isSeedingDefaults}
             className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 transition hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
-            title="Isi 15 mapel default (Kelompok A 7 mapel, Kelompok B 8 mapel)"
+            title="Isi mapel default (Kelompok A, B, dan Layanan BK dengan jenjang otomatis)"
           >
             {isSeedingDefaults ? <Loader2 size={16} className="animate-spin" /> : <BookOpen size={16} />}
             Isi Mapel Default
@@ -292,13 +326,10 @@ export default function SubjectsPage() {
         <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
         <div className="space-y-1">
           <p className="font-semibold text-blue-900">
-            Sinkronisasi Struktur Kurikulum & Cetak Raport:
+            Sinkronisasi Struktur Kurikulum Per Jenjang & Cetak Raport:
           </p>
           <p className="text-xs text-blue-700 leading-relaxed">
-            Mata pelajaran di bawah ini otomatis terbagi ke dalam{" "}
-            <strong>Kelompok A (Umum: 7 Mapel)</strong> dan{" "}
-            <strong>Kelompok B (Kejuruan: 8 Mapel)</strong>. Penomoran dan urutan di halaman ini
-            sama persis dengan yang tampil di lembar raport dan rekap nilai DKN.
+            Mata pelajaran di bawah ini otomatis terbagi ke dalam <strong>Kelompok A (Umum)</strong>, <strong>Kelompok B (Kejuruan)</strong>, dan <strong>Layanan BK</strong> serta terfilter sesuai jenjang <strong>Kelas X</strong>, <strong>Kelas XI</strong>, dan <strong>Kelas XII</strong>. Saat mencetak raport siswa, sistem hanya memuat mata pelajaran yang aktif untuk jenjang kelas siswa tersebut.
           </p>
         </div>
       </div>
@@ -325,7 +356,82 @@ export default function SubjectsPage() {
         </div>
       )}
 
-      {/* Group Summary Badges / Quick Filter Tabs */}
+      {/* Submenu Jenjang Kelas (X, XI, XII, Semua) */}
+      <div className="bg-gradient-to-r from-slate-100 via-slate-50 to-slate-100 p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setSelectedLevelFilter("ALL")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+            selectedLevelFilter === "ALL"
+              ? "bg-slate-900 text-white shadow-sm border border-slate-900"
+              : "bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-50"
+          }`}
+        >
+          <span>🌟 Semua Tingkat</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              selectedLevelFilter === "ALL" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-800"
+            }`}
+          >
+            {totalCount} Mapel
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedLevelFilter("X")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+            selectedLevelFilter === "X"
+              ? "bg-blue-600 text-white shadow-sm border border-blue-600"
+              : "bg-white text-blue-900 border border-blue-200/80 hover:bg-blue-50"
+          }`}
+        >
+          <span>📘 Kelas X (Fase E)</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              selectedLevelFilter === "X" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-800"
+            }`}
+          >
+            {countX} Mapel
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedLevelFilter("XI")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+            selectedLevelFilter === "XI"
+              ? "bg-amber-600 text-white shadow-sm border border-amber-600"
+              : "bg-white text-amber-900 border border-amber-200/80 hover:bg-amber-50"
+          }`}
+        >
+          <span>📙 Kelas XI (Fase F)</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              selectedLevelFilter === "XI" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {countXI} Mapel
+          </span>
+        </button>
+
+        <button
+          onClick={() => setSelectedLevelFilter("XII")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+            selectedLevelFilter === "XII"
+              ? "bg-rose-600 text-white shadow-sm border border-rose-600"
+              : "bg-white text-rose-900 border border-rose-200/80 hover:bg-rose-50"
+          }`}
+        >
+          <span>📕 Kelas XII (Fase F)</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+              selectedLevelFilter === "XII" ? "bg-white/20 text-white" : "bg-rose-100 text-rose-800"
+            }`}
+          >
+            {countXII} Mapel
+          </span>
+        </button>
+      </div>
+
+      {/* Group Summary Badges / Quick Filter Tabs & Search */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -336,7 +442,7 @@ export default function SubjectsPage() {
                 : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
             }`}
           >
-            Semua Kelompok ({totalCount})
+            Semua Kelompok ({currentLevelTotal})
           </button>
           <button
             onClick={() => setSelectedGroupFilter("A")}
@@ -403,12 +509,12 @@ export default function SubjectsPage() {
         <div className="bg-white rounded-2xl border p-12 text-center text-gray-500 shadow-sm">
           <Layers size={36} className="mx-auto mb-3 text-gray-400" />
           <p className="text-base font-semibold text-gray-800">
-            {searchQuery ? "Mata pelajaran tidak ditemukan" : "Belum ada data mata pelajaran"}
+            {searchQuery ? "Mata pelajaran tidak ditemukan" : "Belum ada mata pelajaran untuk jenjang ini"}
           </p>
           <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
             {searchQuery
               ? `Tidak ada mata pelajaran yang cocok dengan pencarian "${searchQuery}". Coba kata kunci lain.`
-              : 'Klik tombol "Isi Mapel Default" untuk memuat struktur mapel resmi secara otomatis, atau tambahkan secara manual.'}
+              : 'Gunakan tombol "Tambah Mata Pelajaran" atau pilih jenjang lain untuk melihat mapel terdaftar.'}
           </p>
         </div>
       ) : (
@@ -462,7 +568,7 @@ export default function SubjectsPage() {
                   <table className="w-full border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
-                        <th className="w-14 px-4 py-3 text-center text-xs font-bold uppercase text-slate-600">
+                        <th className="w-12 px-3 py-3 text-center text-xs font-bold uppercase text-slate-600">
                           No
                         </th>
                         <th className="w-24 px-4 py-3 text-left text-xs font-bold uppercase text-slate-600">
@@ -471,13 +577,16 @@ export default function SubjectsPage() {
                         <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-600">
                           Nama Mata Pelajaran
                         </th>
-                        <th className="w-44 px-4 py-3 text-left text-xs font-bold uppercase text-slate-600">
+                        <th className="w-36 px-4 py-3 text-center text-xs font-bold uppercase text-slate-600">
+                          Jenjang Kelas
+                        </th>
+                        <th className="w-40 px-4 py-3 text-left text-xs font-bold uppercase text-slate-600">
                           Kelompok
                         </th>
-                        <th className="w-40 px-4 py-3 text-center text-xs font-bold uppercase text-slate-600">
+                        <th className="w-36 px-4 py-3 text-center text-xs font-bold uppercase text-slate-600">
                           Status Raport
                         </th>
-                        <th className="w-32 px-4 py-3 text-right text-xs font-bold uppercase text-slate-600">
+                        <th className="w-28 px-4 py-3 text-right text-xs font-bold uppercase text-slate-600">
                           Aksi
                         </th>
                       </tr>
@@ -485,77 +594,103 @@ export default function SubjectsPage() {
                     <tbody className="divide-y divide-slate-100">
                       {group.items.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-xs text-slate-400">
-                            Tidak ada mata pelajaran di kelompok ini yang cocok dengan pencarian.
+                          <td colSpan={7} className="px-4 py-8 text-center text-xs text-slate-400">
+                            Tidak ada mata pelajaran di kelompok ini yang cocok dengan pencarian / jenjang yang dipilih.
                           </td>
                         </tr>
                       ) : (
-                        group.items.map((subject, idx) => (
-                          <tr
-                            key={subject.id}
-                            className="transition hover:bg-slate-50/80 group"
-                          >
-                            <td className="px-4 py-3 text-center text-xs font-semibold text-slate-500">
-                              {idx + 1}
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <span className="inline-block rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-bold text-slate-800 border border-slate-200">
-                                {subject.code}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <span className="font-semibold text-slate-900 text-sm">
-                                {subject.name}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-left">
-                              <span
-                                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${badgeBg}`}
-                              >
-                                {isGroupA && "Kelompok A (Umum)"}
-                                {isGroupB && "Kelompok B (Kejuruan)"}
-                                {isGroupBK && "Layanan BK"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {isGroupBK ? (
-                                <span className="inline-block rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">
-                                  Layanan Khusus
+                        group.items.map((subject, idx) => {
+                          const activeLevels = subject.parsedLevels || parseSubjectLevels(subject.levels);
+                          return (
+                            <tr
+                              key={subject.id}
+                              className="transition hover:bg-slate-50/80 group"
+                            >
+                              <td className="px-3 py-3 text-center text-xs font-semibold text-slate-500">
+                                {idx + 1}
+                              </td>
+                              <td className="px-4 py-3 text-left">
+                                <span className="inline-block rounded-md bg-slate-100 px-2 py-1 font-mono text-xs font-bold text-slate-800 border border-slate-200">
+                                  {subject.code}
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
-                                  <CheckCircle2 size={12} className="text-emerald-600" />
-                                  Muncul di Raport
+                              </td>
+                              <td className="px-4 py-3 text-left">
+                                <span className="font-semibold text-slate-900 text-sm">
+                                  {subject.name}
                                 </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100">
-                                <button
-                                  className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition"
-                                  title="Lihat Detail"
-                                  onClick={() => setDetailSubject(subject)}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  {(["X", "XI", "XII"] as ClassLevel[]).map((lvl) => {
+                                    const isAvail = activeLevels.includes(lvl);
+                                    if (!isAvail) return null;
+                                    const badgeStyle =
+                                      lvl === "X"
+                                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                                        : lvl === "XI"
+                                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                                        : "bg-rose-50 text-rose-700 border-rose-200";
+                                    return (
+                                      <span
+                                        key={lvl}
+                                        className={`inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-bold border ${badgeStyle}`}
+                                        title={`Berlaku di Kelas ${lvl}`}
+                                      >
+                                        {lvl}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-left">
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${badgeBg}`}
                                 >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition"
-                                  title="Edit"
-                                  onClick={() => handleEditSubject(subject)}
-                                >
-                                  <Edit size={15} />
-                                </button>
-                                <button
-                                  className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition"
-                                  title="Hapus"
-                                  onClick={() => handleDeleteSubject(subject.id, subject.name)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
+                                  {isGroupA && "Kelompok A (Umum)"}
+                                  {isGroupB && "Kelompok B (Kejuruan)"}
+                                  {isGroupBK && "Layanan BK"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {isGroupBK ? (
+                                  <span className="inline-block rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">
+                                    Layanan Khusus
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                                    <CheckCircle2 size={12} className="text-emerald-600" />
+                                    Muncul di Raport
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100">
+                                  <button
+                                    className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-lg transition"
+                                    title="Lihat Detail"
+                                    onClick={() => setDetailSubject(subject)}
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+                                  <button
+                                    className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg transition"
+                                    title="Edit"
+                                    onClick={() => handleEditSubject(subject)}
+                                  >
+                                    <Edit size={15} />
+                                  </button>
+                                  <button
+                                    className="p-1.5 hover:bg-red-50 text-red-600 rounded-lg transition"
+                                    title="Hapus"
+                                    onClick={() => handleDeleteSubject(subject.id, subject.name)}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -599,12 +734,36 @@ export default function SubjectsPage() {
                   </p>
                 </div>
               </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-500 uppercase mb-1 block">Jenjang Kelas Aktif</label>
+                <div className="flex items-center gap-2">
+                  {(["X", "XI", "XII"] as ClassLevel[]).map((lvl) => {
+                    const isAvail = (detailSubject.parsedLevels || parseSubjectLevels(detailSubject.levels)).includes(lvl);
+                    const pillColor = isAvail
+                      ? lvl === "X"
+                        ? "bg-blue-600 text-white"
+                        : lvl === "XI"
+                        ? "bg-amber-600 text-white"
+                        : "bg-rose-600 text-white"
+                      : "bg-slate-100 text-slate-400 border border-slate-200 line-through";
+                    return (
+                      <span key={lvl} className={`px-2.5 py-1 rounded-lg text-xs font-bold ${pillColor}`}>
+                        Kelas {lvl}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
                 <p className="font-semibold text-slate-800 mb-1">Status Integrasi Sistem:</p>
                 {getSubjectGroup(detailSubject.name, detailSubject.code).code === "BK" ? (
-                  <p>Mata pelajaran ini tercatat sebagai layanan konseling siswa dan tidak dicantumkan pada nilai raport intrakurikuler.</p>
+                  <p>Mata pelajaran ini tercatat sebagai layanan bimbingan konseling siswa dan tidak dicantumkan pada nilai raport intrakurikuler.</p>
                 ) : (
-                  <p>Mata pelajaran ini aktif digunakan pada penginputan nilai harian (UH, Tugas, STS, SAS) dan dicetak resmi pada raport siswa.</p>
+                  <p>
+                    Mata pelajaran ini aktif digunakan pada penginputan nilai dan otomatis tampil di raport siswa yang berada pada jenjang kelas di atas.
+                  </p>
                 )}
               </div>
               <div className="flex justify-end pt-2">
@@ -663,6 +822,48 @@ export default function SubjectsPage() {
                 />
               </div>
 
+              {/* Pilihan Jenjang Kelas X, XI, XII */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide">
+                    Berlaku Untuk Jenjang Kelas
+                  </label>
+                  <span className="text-[11px] text-gray-400">Pilih jenjang aktif</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "X" as const, label: "Kelas X", sub: "Fase E", activeClass: "border-blue-500 bg-blue-50 text-blue-800" },
+                    { id: "XI" as const, label: "Kelas XI", sub: "Fase F", activeClass: "border-amber-500 bg-amber-50 text-amber-800" },
+                    { id: "XII" as const, label: "Kelas XII", sub: "Fase F", activeClass: "border-rose-500 bg-rose-50 text-rose-800" },
+                  ].map((lvl) => {
+                    const isChecked = formData.levels.includes(lvl.id);
+                    return (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => {
+                          const newLevels = isChecked
+                            ? formData.levels.filter((l) => l !== lvl.id)
+                            : [...formData.levels, lvl.id];
+                          setFormData({ ...formData, levels: newLevels });
+                        }}
+                        className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition cursor-pointer ${
+                          isChecked
+                            ? `${lvl.activeClass} font-bold shadow-xs`
+                            : "border-gray-200 bg-gray-50/70 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        }`}
+                      >
+                        <span className="text-xs font-bold">{lvl.label}</span>
+                        <span className="text-[10px] font-normal opacity-80">{lvl.sub}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {formData.levels.length === 0 && (
+                  <p className="text-[11px] text-red-600 mt-1">Pilih minimal 1 jenjang kelas.</p>
+                )}
+              </div>
+
               {/* Dynamic Group Detector Preview */}
               {detectedGroupInForm && (
                 <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-900">
@@ -675,7 +876,7 @@ export default function SubjectsPage() {
                     </span>
                   </div>
                   <p className="text-[11px] text-indigo-700 leading-relaxed">
-                    Mata pelajaran ini otomatis masuk ke dalam <strong>{detectedGroupInForm.name}</strong> dan tersinkronisasi di raport.
+                    Mata pelajaran ini otomatis masuk ke dalam <strong>{detectedGroupInForm.name}</strong> dan tersinkronisasi di raport jenjang yang dipilih.
                   </p>
                 </div>
               )}
@@ -691,7 +892,7 @@ export default function SubjectsPage() {
                 <button
                   type="button"
                   onClick={handleAddSubject}
-                  disabled={isSaving}
+                  disabled={isSaving || formData.levels.length === 0}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg text-xs font-semibold hover:bg-primary-700 transition disabled:opacity-60 shadow-sm"
                 >
                   {isSaving && <Loader2 size={14} className="animate-spin" />}

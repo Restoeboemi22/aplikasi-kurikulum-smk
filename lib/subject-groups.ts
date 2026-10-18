@@ -28,6 +28,45 @@ export const SUBJECT_GROUPS: Record<SubjectGroupCode, SubjectGroupInfo> = {
   },
 };
 
+export type ClassLevel = "X" | "XI" | "XII";
+export const ALL_CLASS_LEVELS: ClassLevel[] = ["X", "XI", "XII"];
+
+export const CLASS_LEVEL_LABELS: Record<ClassLevel, { name: string; phase: string; color: string }> = {
+  X: { name: "Kelas X", phase: "Fase E", color: "blue" },
+  XI: { name: "Kelas XI", phase: "Fase F", color: "amber" },
+  XII: { name: "Kelas XII", phase: "Fase F", color: "rose" },
+};
+
+export function parseSubjectLevels(levels?: string | null): ClassLevel[] {
+  if (!levels || !levels.trim()) {
+    return ["X", "XI", "XII"];
+  }
+  const parts = levels
+    .split(",")
+    .map((s) => s.trim().toUpperCase())
+    .filter((s): s is ClassLevel => ["X", "XI", "XII"].includes(s as any));
+  return parts.length > 0 ? parts : ["X", "XI", "XII"];
+}
+
+export function isSubjectActiveInLevel(
+  levels?: string | null,
+  targetLevel?: string | null
+): boolean {
+  if (!targetLevel || targetLevel === "ALL") return true;
+  const parsed = parseSubjectLevels(levels);
+  const target = targetLevel.trim().toUpperCase() as ClassLevel;
+  return parsed.includes(target);
+}
+
+export function extractClassLevel(className?: string | null): ClassLevel | null {
+  if (!className) return null;
+  const upper = className.trim().toUpperCase();
+  if (upper.startsWith("XII") || upper.includes(" XII ") || upper.endsWith(" XII")) return "XII";
+  if (upper.startsWith("XI") || upper.includes(" XI ") || upper.endsWith(" XI")) return "XI";
+  if (upper.startsWith("X") || upper.includes(" X ") || upper.endsWith(" X")) return "X";
+  return null;
+}
+
 export const CANONICAL_SUBJECT_CODES = [
   // Kelompok A (Umum): 1 - 7
   "PABP", "PARP", "PAI", "PAK",

@@ -105,6 +105,7 @@ model Subject {
   id          String    @id @default(cuid())
   code        String    @unique
   name        String    @unique
+  levels      String?   @default("X,XI,XII")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
