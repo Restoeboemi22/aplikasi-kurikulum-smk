@@ -8,6 +8,7 @@ export type DKNSubjectConfig = {
   shortLabel: string;
   orderLabel: string;
   group: DKNSubjectGroup;
+  levels?: string;
 };
 
 export const DKN_SUBJECTS: DKNSubjectConfig[] = [
@@ -17,6 +18,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "PABP",
     orderLabel: "1",
     group: "UMUM",
+    levels: "X,XI,XII",
   },
   {
     name: "Pendidikan Pancasila",
@@ -24,6 +26,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Pancasila",
     orderLabel: "2",
     group: "UMUM",
+    levels: "X,XI,XII",
   },
   {
     name: "Bahasa Indonesia",
@@ -31,6 +34,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "B. Indo",
     orderLabel: "3",
     group: "UMUM",
+    levels: "X,XI,XII",
   },
   {
     name: "Pendidikan Jasmani , Olah Raga dan Kesehatan",
@@ -38,6 +42,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "PJOK",
     orderLabel: "4",
     group: "UMUM",
+    levels: "X,XI",
   },
   {
     name: "Sejarah",
@@ -45,6 +50,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Sejarah",
     orderLabel: "5",
     group: "UMUM",
+    levels: "X,XI",
   },
   {
     name: "Seni Budaya",
@@ -52,6 +58,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Senbud",
     orderLabel: "6",
     group: "UMUM",
+    levels: "X",
   },
   {
     name: "Bahasa dan Sastra Jawa",
@@ -59,6 +66,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Mulok",
     orderLabel: "7",
     group: "UMUM",
+    levels: "X,XI,XII",
   },
   {
     name: "Matematika",
@@ -66,6 +74,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "MTK",
     orderLabel: "8",
     group: "KEJURUAN",
+    levels: "X,XI,XII",
   },
   {
     name: "Bahasa Inggris",
@@ -73,6 +82,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "B. Ing",
     orderLabel: "9",
     group: "KEJURUAN",
+    levels: "X,XI,XII",
   },
   {
     name: "Informatika",
@@ -80,6 +90,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Info",
     orderLabel: "10",
     group: "KEJURUAN",
+    levels: "X",
   },
   {
     name: "Projek Ilmu Pengetahuan Alam dan Sosial",
@@ -87,6 +98,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "IPAS",
     orderLabel: "11",
     group: "KEJURUAN",
+    levels: "X",
   },
   {
     name: "Dasar-Dasar Program Keahlian",
@@ -94,6 +106,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "DDPK",
     orderLabel: "12",
     group: "KEJURUAN",
+    levels: "X",
   },
   {
     name: "Konsentrasi Keahlian",
@@ -101,6 +114,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "Kons",
     orderLabel: "13",
     group: "KEJURUAN",
+    levels: "XI,XII",
   },
   {
     name: "Projek Kreatif dan Kewirausahaan",
@@ -108,6 +122,7 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "PKK",
     orderLabel: "14",
     group: "KEJURUAN",
+    levels: "XI,XII",
   },
   {
     name: "Praktik Kerja Lapangan",
@@ -115,8 +130,26 @@ export const DKN_SUBJECTS: DKNSubjectConfig[] = [
     shortLabel: "PKL",
     orderLabel: "15",
     group: "KEJURUAN",
+    levels: "XII",
   },
 ];
+
+export function getDKNSubjectsForLevel(gradeLevel?: string | null): DKNSubjectConfig[] {
+  if (!gradeLevel || gradeLevel === "ALL") {
+    return DKN_SUBJECTS;
+  }
+  const target = gradeLevel.trim().toUpperCase();
+  const filtered = DKN_SUBJECTS.filter((sub) => {
+    if (!sub.levels) return true;
+    const parts = sub.levels.split(",").map((p) => p.trim().toUpperCase());
+    return parts.includes(target);
+  });
+
+  return filtered.map((sub, idx) => ({
+    ...sub,
+    orderLabel: String(idx + 1),
+  }));
+}
 
 export const DKN_CRITERIA = {
   reportWeightPercent: 50,

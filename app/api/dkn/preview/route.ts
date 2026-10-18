@@ -10,6 +10,7 @@ import {
   calculateTotal,
   DKN_CRITERIA,
   DKN_SUBJECTS,
+  getDKNSubjectsForLevel,
   determineDknStatus,
   getDKNConcentration,
   normalizeGenderLabel,
@@ -107,13 +108,15 @@ export async function GET(request: NextRequest) {
       return map;
     }, new Map<string, GradeRecord[]>());
 
+    const dknSubjects = getDKNSubjectsForLevel(classInfo.grade);
+
     const rows = students.map((student, index) => {
       const rrScores: ScoreMap = {};
       const psajScores: ScoreMap = {};
       const nspScores: ScoreMap = {};
       const characterScores: string[] = [];
 
-      DKN_SUBJECTS.forEach((subject) => {
+      dknSubjects.forEach((subject) => {
         const records = gradeMap.get(`${student.id}::${subject.name}`) ?? [];
         const summary = calculateFinalScore(records);
 
@@ -126,9 +129,9 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      const rrValues = DKN_SUBJECTS.map((subject) => rrScores[subject.name]);
-      const psajValues = DKN_SUBJECTS.map((subject) => psajScores[subject.name]);
-      const nspValues = DKN_SUBJECTS.map((subject) => nspScores[subject.name]);
+      const rrValues = dknSubjects.map((subject) => rrScores[subject.name]);
+      const psajValues = dknSubjects.map((subject) => psajScores[subject.name]);
+      const nspValues = dknSubjects.map((subject) => nspScores[subject.name]);
 
       const reportAverage = calculateAverage(rrValues);
       const psajAverage = calculateAverage(psajValues);
@@ -200,7 +203,7 @@ export async function GET(request: NextRequest) {
           classInfo.homeroomTeacherProfile?.user?.name || classInfo.homeroomTeacher || "-",
         concentration: getDKNConcentration(classInfo.majorCode, classInfo.majorName),
       },
-      subjects: DKN_SUBJECTS,
+      subjects: dknSubjects,
       rows,
     });
   } catch (error) {

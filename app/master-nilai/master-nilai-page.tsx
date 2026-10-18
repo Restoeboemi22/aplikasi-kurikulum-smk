@@ -9,6 +9,7 @@ import {
   getDefaultGradePeriod,
   SEMESTER_OPTIONS,
 } from "@/lib/grade-period";
+import { getSubjectGroup } from "@/lib/subject-groups";
 
 type MasterNilaiPageProps = {
   allowedClassNames?: string[];
@@ -209,6 +210,12 @@ export default function MasterNilaiPage({
             : value.subject,
       }))
       .sort((a, b) => {
+        const grpA = getSubjectGroup(a.subject).code;
+        const grpB = getSubjectGroup(b.subject).code;
+        const grpOrder: Record<string, number> = { A: 1, B: 2, BK: 3 };
+        if (grpOrder[grpA] !== grpOrder[grpB]) {
+          return (grpOrder[grpA] || 99) - (grpOrder[grpB] || 99);
+        }
         const bySubject = a.subject.localeCompare(b.subject, "id-ID");
         if (bySubject !== 0) return bySubject;
         return a.teacherName.localeCompare(b.teacherName, "id-ID");

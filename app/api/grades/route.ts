@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/server-session';
+import { isSubjectActiveInLevel, extractClassLevel } from '@/lib/subject-groups';
 
 const isSemesterLabelValid = (semester: string) =>
   /^(Ganjil|Genap)\s+\d{4}\/\d{4}$/.test(semester);
@@ -157,6 +158,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate that the subject is active for this class level
+    const dbSubject = await prisma.subject.findFirst({
+      where: {
+        OR: [
+          { name: commonSubject },
+          { code: commonSubject },
+        ],
+      },
+    });
+
+    if (dbSubject && !isSubjectActiveInLevel(dbSubject.levels, commonClassLevel)) {
+      return NextResponse.json(
+        {
+          error: `Mata pelajaran "${commonSubject}" tidak diajarkan pada jenjang Kelas ${commonClassLevel} sesuai struktur kurikulum.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Resolve teacher
     let teacher = null;
     if (session.role === 'ADMIN') {
@@ -263,12 +283,26 @@ export async function POST(request: NextRequest) {
               name: sName,
               ...(commonClassName
                 ? { className: commonClassName }
-                : { className: { startsWith: `${commonClassLevel} ${commonMajor}` } }),
+                : { className: { startsWith: `${commonClassLevel} ` } }),
             },
           });
         }
 
         if (!student) continue;
+
+        // Anti cross-class validation: ensure student actually belongs to the target class
+        if (commonClassName && student.className && student.className.trim() !== commonClassName.trim()) {
+          console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target class is ${commonClassName}`);
+          continue;
+        }
+
+        // Anti cross-level validation: ensure student's class matches target level
+        if (commonClassLevel && student.className && !student.className.trim().startsWith(commonClassLevel + ' ')) {
+          console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target level is ${commonClassLevel}`);
+          continue;
+        }
+
+        const realClassLevel = extractClassLevel(student.className) || commonClassLevel;
 
         const existing = gradeByStudentId.get(student.id) || await tx.grade.findFirst({
           where: {
@@ -276,8 +310,6 @@ export async function POST(request: NextRequest) {
             subject: commonSubject,
             semester: commonSemester,
             jenisPenilaian: commonJenisPenilaian,
-            classLevel: commonClassLevel,
-            major: commonMajor,
           },
         });
 
@@ -294,6 +326,8 @@ export async function POST(request: NextRequest) {
               nilai2: n2 || null,
               nilai3: n3 || null,
               nilaiAkhir: nAkhir || null,
+              classLevel: realClassLevel,
+              major: commonMajor,
               teacherId: teacher.id,
               userId: teacher.userId,
             },
@@ -304,7 +338,7 @@ export async function POST(request: NextRequest) {
             data: {
               studentId: student.id,
               subject: commonSubject,
-              classLevel: commonClassLevel,
+              classLevel: realClassLevel,
               major: commonMajor,
               jenisPenilaian: commonJenisPenilaian,
               semester: commonSemester,
