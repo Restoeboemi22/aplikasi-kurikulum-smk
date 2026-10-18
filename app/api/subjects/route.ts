@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireRole, requireSession } from '@/lib/server-session';
 import { DEFAULT_SUBJECTS } from '@/lib/default-subjects';
+import { getSubjectGroup, sortSubjectsWithGroup } from '@/lib/subject-groups';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,21 +10,19 @@ export async function GET(request: NextRequest) {
     const subjects = await prisma.subject.findMany({
       orderBy: { name: 'asc' }
     });
-    const orderByCode = new Map(DEFAULT_SUBJECTS.map((subject, index) => [subject.code, index]));
-    const orderByName = new Map(DEFAULT_SUBJECTS.map((subject, index) => [subject.name, index]));
 
-    const sortedSubjects = [...subjects].sort((a, b) => {
-      const aOrder = orderByCode.get(a.code) ?? orderByName.get(a.name) ?? Number.MAX_SAFE_INTEGER;
-      const bOrder = orderByCode.get(b.code) ?? orderByName.get(b.name) ?? Number.MAX_SAFE_INTEGER;
-
-      if (aOrder !== bOrder) {
-        return aOrder - bOrder;
-      }
-
-      return a.name.localeCompare(b.name, "id");
+    const sortedSubjects = sortSubjectsWithGroup(subjects);
+    const enriched = sortedSubjects.map((s) => {
+      const grp = getSubjectGroup(s.name, s.code);
+      return {
+        ...s,
+        groupCode: grp.code,
+        groupName: grp.name,
+        badgeLabel: grp.badgeLabel,
+      };
     });
 
-    return NextResponse.json(sortedSubjects);
+    return NextResponse.json(enriched);
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Session login tidak valid.' }, { status: 401 });
