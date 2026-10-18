@@ -9,8 +9,11 @@ import {
   canAccessReportClass,
   getPhaseFromClassLevel,
   getReportGroup,
+  isBKSubject,
+  isMatchingGrade,
   matchesReportMajorCode,
   resolveReportViewerAccess,
+  sortReportSubjects,
   sortSubjects,
 } from "@/lib/report-card";
 import { getReportProfile } from "@/lib/report-profiles";
@@ -126,6 +129,18 @@ export async function GET(request: NextRequest) {
         })
       : null;
 
+    // 1. Fetch subjects directly from database Subject table
+    const dbSubjects = await prisma.subject.findMany({
+      orderBy: { createdAt: "asc" },
+    });
+
+    // 2. Exclude BK (Bimbingan Konseling) from report card
+    const reportDbSubjects = dbSubjects.filter((s) => !isBKSubject(s));
+
+    // 3. Sort subjects according to curriculum standard (Group A first, then Group B)
+    const sortedDbSubjects = sortReportSubjects(reportDbSubjects);
+
+    // 4. Fetch grades for student in this semester
     const grades = await prisma.grade.findMany({
       where: {
         studentId,
@@ -134,38 +149,65 @@ export async function GET(request: NextRequest) {
       orderBy: [{ subject: "asc" }, { jenisPenilaian: "asc" }],
     });
 
-    const gradeMap = new Map<string, typeof grades>();
-    grades.forEach((grade) => {
-      const list = gradeMap.get(grade.subject) ?? [];
-      list.push(grade as typeof grades[number] & { jenisPenilaian: ReportGradeType });
-      gradeMap.set(grade.subject, list);
+    // Filter out any BK grades from student grades
+    const nonBKGrades = grades.filter((g) => !isBKSubject(g.subject));
+
+    // 5. Build subject list:
+    // Primary list comes from database subjects.
+    // If student has grades in nonBKGrades for a subject not currently in database,
+    // also include it so teacher input is never lost.
+    const subjectList: Array<{ code: string; name: string }> = sortedDbSubjects.map((s) => ({
+      code: s.code,
+      name: s.name,
+    }));
+
+    const extraSubjects = new Map<string, { code: string; name: string }>();
+    nonBKGrades.forEach((g) => {
+      const matchesAny = subjectList.some((s) => isMatchingGrade(g.subject, s));
+      if (!matchesAny && !extraSubjects.has(g.subject)) {
+        extraSubjects.set(g.subject, {
+          code: "",
+          name: g.subject,
+        });
+      }
     });
 
-    const subjectNames = sortSubjects(Array.from(gradeMap.keys()));
-    const objectiveFilters = subjectNames
-      .map((subjectName) => {
-        const teacherId = (gradeMap.get(subjectName) ?? []).find((item) => item.teacherId)?.teacherId;
+    if (extraSubjects.size > 0) {
+      const sortedExtras = sortReportSubjects(Array.from(extraSubjects.values()));
+      subjectList.push(...sortedExtras);
+    }
+
+    // 6. Map grades to subjects
+    const subjectGradesMap = new Map<string, typeof nonBKGrades>();
+    subjectList.forEach((subject) => {
+      const matched = nonBKGrades.filter((g) => isMatchingGrade(g.subject, subject));
+      subjectGradesMap.set(subject.name, matched);
+    });
+
+    // 7. Teaching objectives lookup
+    const objectiveFilters = subjectList
+      .map((subject) => {
+        const gradesForSub = subjectGradesMap.get(subject.name) ?? [];
+        const teacherId = gradesForSub.find((item) => item.teacherId)?.teacherId;
         if (!teacherId || !student.className) return null;
 
-        return {
+        const possibleNames = Array.from(new Set([subject.name, ...gradesForSub.map((g) => g.subject)]));
+        return possibleNames.map((name) => ({
           teacherId,
-          subject: subjectName,
-          className: student.className,
+          subject: name,
+          className: student.className!,
           academicYear,
           semester,
-        };
+        }));
       })
-      .filter(
-        (
-          value
-        ): value is {
-          teacherId: string;
-          subject: string;
-          className: string;
-          academicYear: string;
-          semester: SemesterTerm;
-        } => value !== null
-      );
+      .filter((items): items is Array<{
+        teacherId: string;
+        subject: string;
+        className: string;
+        academicYear: string;
+        semester: SemesterTerm;
+      }> => items !== null)
+      .flat();
 
     const teachingObjectives = objectiveFilters.length
       ? await prisma.teachingObjective.findMany({
@@ -177,22 +219,35 @@ export async function GET(request: NextRequest) {
       : [];
 
     const objectivesBySubject = teachingObjectives.reduce((map, item) => {
-      const objectives = map.get(item.subject) ?? [];
+      const targetSub = subjectList.find((s) => isMatchingGrade(item.subject, s));
+      const key = targetSub ? targetSub.name : item.subject;
+      const objectives = map.get(key) ?? [];
       objectives.push(item.objectiveText);
-      map.set(item.subject, objectives);
+      map.set(key, objectives);
       return map;
     }, new Map<string, string[]>());
 
-    const rows = subjectNames.map((subjectName, index) => {
-      const subjectGrades = gradeMap.get(subjectName) ?? [];
-      const score = calculateFinalScore(subjectGrades, reportVariant ?? "SAS");
-      const group = getReportGroup(subjectName);
+    // 8. Build rows
+    const rows = subjectList.map((subject, index) => {
+      const subjectGrades = subjectGradesMap.get(subject.name) ?? [];
+      const score = calculateFinalScore(
+        subjectGrades as Array<{
+          subject: string;
+          jenisPenilaian: "UH" | "TUGAS" | "STS" | "SAS" | "SIKAP";
+          nilai1: string | null;
+          nilai2: string | null;
+          nilai3: string | null;
+          nilaiAkhir: string | null;
+        }>,
+        reportVariant ?? "SAS"
+      );
+      const group = getReportGroup(subject.name, subject.code);
 
       return {
         no: index + 1,
         groupCode: group.code,
         groupName: group.name,
-        subjectName,
+        subjectName: subject.name,
         uhAverage: score.uhAverage,
         tugasAverage: score.tugasAverage,
         stsScore: score.stsScore,
@@ -201,9 +256,9 @@ export async function GET(request: NextRequest) {
         roundedScore: score.roundedScore,
         sikapScore: score.sikapScore,
         competenceNote: buildCompetenceNote(
-          subjectName,
+          subject.name,
           score.finalScore,
-          objectivesBySubject.get(subjectName) ?? []
+          objectivesBySubject.get(subject.name) ?? []
         ),
         isComplete: score.finalScore !== null,
       };

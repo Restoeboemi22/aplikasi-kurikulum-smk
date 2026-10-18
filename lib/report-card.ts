@@ -4,38 +4,36 @@ import { buildSemesterLabel, type SemesterTerm } from "@/lib/grade-period";
 import type { ServerSessionUser } from "@/lib/server-session";
 import type { ReportMajorCode } from "@/lib/report-profiles";
 
-const SUBJECT_GROUPS = {
+export type ReportGroup = {
+  code: "A" | "B";
+  name: string;
+};
+
+export const REPORT_SUBJECT_GROUPS: Record<"A" | "B", ReportGroup> = {
   A: {
     code: "A",
     name: "Kelompok Mata Pelajaran Umum",
-    subjects: [
-      "Pendidikan Agama dan Budi Pekerti",
-      "Pendidikan Pancasila",
-      "Bahasa Indonesia",
-      "Pendidikan Jasmani , Olah Raga dan Kesehatan",
-      "Sejarah",
-      "Seni Budaya",
-      "Bahasa dan Sastra Jawa",
-      "Matematika",
-      "Bahasa Inggris",
-    ],
   },
   B: {
     code: "B",
     name: "Mata Pelajaran Kejuruan",
-    subjects: [
-      "Informatika",
-      "Projek Ilmu Pengetahuan Alam dan Sosial",
-      "Dasar-Dasar Program Keahlian",
-      "Konsentrasi Keahlian",
-      "Projek Kreatif dan Kewirausahaan",
-      "Praktik Kerja Lapangan",
-      "Mata Pelajaran pilihan",
-    ],
   },
-} as const;
+};
 
-const subjectOrder = new Map(DEFAULT_SUBJECTS.map((subject, index) => [subject.name, index]));
+export const CANONICAL_SUBJECT_CODES = [
+  "PABP", "PARP", "PAI", "PAK", "PPS", "PKN", "PPKN", "BIN", "PJOK", "SEJ", "SBD", "BSJ", "MULOK", "MTK", "BIG",
+  "INF", "IPAS", "DDPK", "KK", "PKK", "PKL", "MPP",
+];
+
+const subjectOrder = new Map<string, number>();
+DEFAULT_SUBJECTS.forEach((subject, index) => {
+  subjectOrder.set(subject.name.toLowerCase().trim(), index);
+  subjectOrder.set(subject.code.toLowerCase().trim(), index);
+});
+subjectOrder.set("pendidikan agama dan budi pekerti", 0);
+subjectOrder.set("pendidikan agama islam dan budi pekerti", 0);
+subjectOrder.set("pkn", 1);
+subjectOrder.set("ppkn", 1);
 
 type GradeRecord = {
   subject: string;
@@ -134,34 +132,234 @@ export function matchesReportMajorCode(
   return false;
 }
 
-export function getReportGroup(subjectName: string) {
-  const inGroupA = (SUBJECT_GROUPS.A.subjects as readonly string[]).includes(subjectName);
-  if (inGroupA) {
-    return SUBJECT_GROUPS.A;
+export function isBKSubject(
+  subject?: { code?: string | null; name?: string | null } | string | null
+): boolean {
+  if (!subject) return false;
+  const code = (typeof subject === "string" ? "" : subject.code || "").trim().toUpperCase();
+  const name = (typeof subject === "string" ? subject : subject.name || "").trim().toLowerCase();
+
+  if (code === "BK") return true;
+  if (name === "bk") return true;
+  if (name.includes("bimbingan konseling") || name.includes("bimbingan dan konseling")) return true;
+  return false;
+}
+
+export function getReportGroup(
+  subjectName: string,
+  subjectCode?: string | null
+): ReportGroup {
+  const code = (subjectCode || "").trim().toUpperCase();
+  const name = (subjectName || "").trim().toLowerCase();
+
+  const groupACodes = [
+    "PABP", "PARP", "PAI", "PAK", "PPS", "PPKN", "PKN", "BIN", "PJOK", "SEJ", "SBD", "BSJ", "MULOK", "MTK", "BIG",
+  ];
+  if (groupACodes.includes(code)) {
+    return REPORT_SUBJECT_GROUPS.A;
   }
 
-  const inGroupB = (SUBJECT_GROUPS.B.subjects as readonly string[]).includes(subjectName);
-  if (inGroupB) {
-    return SUBJECT_GROUPS.B;
+  const groupAKeywords = [
+    "agama",
+    "budi pekerti",
+    "pancasila",
+    "kewarganegaraan",
+    "pkn",
+    "ppkn",
+    "bahasa indonesia",
+    "jasmani",
+    "olahraga",
+    "olah raga",
+    "pjok",
+    "penjas",
+    "sejarah",
+    "seni budaya",
+    "seni rupa",
+    "seni musik",
+    "seni tari",
+    "seni teater",
+    "bahasa jawa",
+    "sastra jawa",
+    "muatan lokal",
+    "mulok",
+    "matematika",
+    "bahasa inggris",
+  ];
+
+  if (groupAKeywords.some((kw) => name.includes(kw))) {
+    return REPORT_SUBJECT_GROUPS.A;
   }
 
-  return {
-    code: "L",
-    name: "Mata Pelajaran Lainnya",
-  };
+  return REPORT_SUBJECT_GROUPS.B;
+}
+
+function normalizeSubjectKey(str?: string | null): string {
+  return (str || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+export function isMatchingGrade(
+  gradeSubject: string,
+  targetSubject: { code?: string | null; name: string }
+): boolean {
+  if (isBKSubject(gradeSubject)) return false;
+
+  const gNorm = normalizeSubjectKey(gradeSubject);
+  const tNameNorm = normalizeSubjectKey(targetSubject.name);
+  const tCodeNorm = normalizeSubjectKey(targetSubject.code);
+
+  if (!gNorm) return false;
+
+  if (gNorm === tNameNorm || (tCodeNorm && gNorm === tCodeNorm)) {
+    return true;
+  }
+
+  // Agama aliases
+  const isAgamaTarget =
+    tCodeNorm === "pabp" ||
+    tCodeNorm === "parp" ||
+    tCodeNorm === "pai" ||
+    tNameNorm.includes("agama");
+  const isAgamaGrade =
+    gNorm.includes("agama") ||
+    gNorm === "pabp" ||
+    gNorm === "parp" ||
+    gNorm === "pai";
+  if (isAgamaTarget && isAgamaGrade) return true;
+
+  // Pancasila / PKn aliases
+  const isPancasilaTarget =
+    tCodeNorm === "pps" ||
+    tCodeNorm === "ppkn" ||
+    tCodeNorm === "pkn" ||
+    tNameNorm.includes("pancasila");
+  const isPancasilaGrade =
+    gNorm.includes("pancasila") ||
+    gNorm === "pkn" ||
+    gNorm === "ppkn" ||
+    gNorm === "pps";
+  if (isPancasilaTarget && isPancasilaGrade) return true;
+
+  // IPAS aliases
+  const isIpasTarget =
+    tCodeNorm === "ipas" ||
+    tNameNorm.includes("ipas") ||
+    tNameNorm.includes("alamdansosial");
+  const isIpasGrade =
+    gNorm === "ipas" ||
+    gNorm.includes("ipas") ||
+    gNorm.includes("alamdansosial");
+  if (isIpasTarget && isIpasGrade) return true;
+
+  // PKK aliases
+  const isPkkTarget =
+    tCodeNorm === "pkk" ||
+    tNameNorm.includes("kreatif") ||
+    tNameNorm.includes("kewirausahaan");
+  const isPkkGrade =
+    gNorm === "pkk" ||
+    gNorm.includes("kreatif") ||
+    gNorm.includes("kewirausahaan");
+  if (isPkkTarget && isPkkGrade) return true;
+
+  // DDPK aliases
+  const isDdpkTarget =
+    tCodeNorm === "ddpk" ||
+    tNameNorm.includes("dasardasarprogramkeahlian");
+  const isDdpkGrade =
+    gNorm === "ddpk" ||
+    gNorm.includes("dasardasarprogramkeahlian");
+  if (isDdpkTarget && isDdpkGrade) return true;
+
+  // KK aliases
+  const isKkTarget =
+    tCodeNorm === "kk" ||
+    tNameNorm === "konsentrasikeahlian";
+  const isKkGrade =
+    gNorm === "kk" ||
+    gNorm === "konsentrasikeahlian";
+  if (isKkTarget && isKkGrade) return true;
+
+  // PKL aliases
+  const isPklTarget =
+    tCodeNorm === "pkl" ||
+    tNameNorm.includes("praktikkerjalapangan");
+  const isPklGrade =
+    gNorm === "pkl" ||
+    gNorm.includes("praktikkerjalapangan");
+  if (isPklTarget && isPklGrade) return true;
+
+  // MPP aliases
+  const isMppTarget =
+    tCodeNorm === "mpp" ||
+    tNameNorm.includes("matapelajaranpilihan");
+  const isMppGrade =
+    gNorm === "mpp" ||
+    gNorm.includes("matapelajaranpilihan");
+  if (isMppTarget && isMppGrade) return true;
+
+  // BSJ / Bahasa Jawa aliases
+  const isJawaTarget =
+    tCodeNorm === "bsj" ||
+    tNameNorm.includes("jawa");
+  const isJawaGrade =
+    gNorm === "bsj" ||
+    gNorm.includes("jawa");
+  if (isJawaTarget && isJawaGrade) return true;
+
+  // PJOK aliases
+  const isPjokTarget =
+    tCodeNorm === "pjok" ||
+    (tNameNorm.includes("jasmani") && tNameNorm.includes("kesehatan"));
+  const isPjokGrade =
+    gNorm === "pjok" ||
+    (gNorm.includes("jasmani") && gNorm.includes("kesehatan")) ||
+    gNorm.includes("penjasorkes");
+  if (isPjokTarget && isPjokGrade) return true;
+
+  return false;
+}
+
+export function sortReportSubjects<T extends { code?: string | null; name: string } | string>(
+  subjects: T[]
+): T[] {
+  return [...subjects].sort((a, b) => {
+    const aName = typeof a === "string" ? a : a.name;
+    const aCode = typeof a === "string" ? "" : a.code || "";
+    const bName = typeof b === "string" ? b : b.name;
+    const bCode = typeof b === "string" ? "" : b.code || "";
+
+    const aGroup = getReportGroup(aName, aCode).code;
+    const bGroup = getReportGroup(bName, bCode).code;
+
+    if (aGroup !== bGroup) {
+      return aGroup.localeCompare(bGroup);
+    }
+
+    const aCodeUpper = aCode.trim().toUpperCase();
+    const bCodeUpper = bCode.trim().toUpperCase();
+
+    const aOrder = aCodeUpper ? CANONICAL_SUBJECT_CODES.indexOf(aCodeUpper) : -1;
+    const bOrder = bCodeUpper ? CANONICAL_SUBJECT_CODES.indexOf(bCodeUpper) : -1;
+
+    const aIdx = aOrder >= 0 ? aOrder : Number.MAX_SAFE_INTEGER;
+    const bIdx = bOrder >= 0 ? bOrder : Number.MAX_SAFE_INTEGER;
+
+    if (aIdx !== bIdx) {
+      return aIdx - bIdx;
+    }
+
+    const fallbackA = subjectOrder.get(aCode.toLowerCase().trim()) ?? subjectOrder.get(aName.toLowerCase().trim()) ?? Number.MAX_SAFE_INTEGER;
+    const fallbackB = subjectOrder.get(bCode.toLowerCase().trim()) ?? subjectOrder.get(bName.toLowerCase().trim()) ?? Number.MAX_SAFE_INTEGER;
+    if (fallbackA !== fallbackB) {
+      return fallbackA - fallbackB;
+    }
+
+    return aName.localeCompare(bName, "id");
+  });
 }
 
 export function sortSubjects(subjectNames: string[]) {
-  return [...subjectNames].sort((a, b) => {
-    const aOrder = subjectOrder.get(a) ?? Number.MAX_SAFE_INTEGER;
-    const bOrder = subjectOrder.get(b) ?? Number.MAX_SAFE_INTEGER;
-
-    if (aOrder !== bOrder) {
-      return aOrder - bOrder;
-    }
-
-    return a.localeCompare(b, "id");
-  });
+  return sortReportSubjects(subjectNames);
 }
 
 export function buildSemesterReportLabel(term: SemesterTerm, academicYear: string) {

@@ -109,145 +109,233 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST a new grade or update existing
+// POST a new grade or update existing (supports both single item and batch items)
 export async function POST(request: NextRequest) {
   try {
     const session = requireSession(request);
     const body = await request.json();
-    const {
-      studentName,
-      classLevel,
-      major,
-      className,
-      jenisPenilaian,
-      nilai1,
-      nilai2,
-      nilai3,
-      nilaiAkhir,
-      subject,
-      semester = 'Ganjil 2024/2025',
-    } = body;
 
-    if (!studentName || !classLevel || !major || !jenisPenilaian || !subject) {
+    // Determine if this is a batch request or single request
+    const isBatch = Boolean(body.items && Array.isArray(body.items));
+    const items: Array<{
+      studentId?: string;
+      studentName: string;
+      className?: string;
+      classLevel?: string;
+      major?: string;
+      subject?: string;
+      semester?: string;
+      jenisPenilaian?: any;
+      nilai1?: string | null;
+      nilai2?: string | null;
+      nilai3?: string | null;
+      nilaiAkhir?: string | null;
+    }> = isBatch ? body.items : [body];
+
+    if (items.length === 0) {
+      return NextResponse.json({ error: 'Tidak ada data nilai yang dikirim.' }, { status: 400 });
+    }
+
+    const commonClassLevel = body.classLevel || items[0]?.classLevel;
+    const commonMajor = body.major || items[0]?.major;
+    const commonClassName = body.className || items[0]?.className;
+    const commonSubject = body.subject || items[0]?.subject;
+    const commonSemester = body.semester || items[0]?.semester || 'Ganjil 2026/2027';
+    const commonJenisPenilaian = body.jenisPenilaian || items[0]?.jenisPenilaian;
+
+    if (!commonClassLevel || !commonMajor || !commonJenisPenilaian || !commonSubject) {
       return NextResponse.json(
-        { error: 'Data siswa, kelas, jurusan, dan mapel wajib diisi.' },
+        { error: 'Data kelas, jurusan, mapel, dan jenis penilaian wajib diisi.' },
         { status: 400 }
       );
     }
 
-    if (!semester || !isSemesterLabelValid(semester)) {
+    if (!commonSemester || !isSemesterLabelValid(commonSemester)) {
       return NextResponse.json(
         { error: 'Semester dan tahun ajaran tidak valid.' },
         { status: 400 }
       );
     }
 
-    // Cari siswa dari database yang sudah ada di halaman admin.
-    let student = await prisma.student.findFirst({
-      where: {
-        name: studentName,
-        ...(className
-          ? { className }
-          : {
-              className: {
-                startsWith: `${classLevel} ${major}`,
-              },
-            }),
-      },
-    });
-
-    if (!student) {
-      return NextResponse.json(
-        { error: 'Siswa tidak ditemukan di database admin.' },
-        { status: 404 }
-      );
-    }
-
-    const teacher = await prisma.teacher.findFirst({
-      where: {
-        OR: [{ user: { nip: session.nip } }, { user: { name: session.name } }],
-      },
-      include: { user: true, teachingAssignments: true },
-    });
-
-    if (!teacher) {
-      return NextResponse.json(
-        { error: 'Guru aktif pada session tidak ditemukan di database admin.' },
-        { status: 403 }
-      );
-    }
-
-    if (session.role !== 'TEACHER' || teacher.user.role !== 'TEACHER') {
-      return NextResponse.json(
-        { error: 'Hanya akun guru yang boleh menyimpan nilai.' },
-        { status: 403 }
-      );
-    }
-
-    const matchedAssignment = teacher.teachingAssignments.find((assignment) => {
-      if (assignment.subject !== subject) return false;
-      if (className) {
-        return assignment.className === className;
+    // Resolve teacher
+    let teacher = null;
+    if (session.role === 'ADMIN') {
+      if (body.teacherId) {
+        teacher = await prisma.teacher.findUnique({
+          where: { id: body.teacherId },
+          include: { user: true, teachingAssignments: true },
+        });
       }
-      return assignment.classLevel === classLevel && assignment.majorCode === major;
-    });
-
-    if (!matchedAssignment) {
-      return NextResponse.json(
-        { error: 'Guru tidak memiliki penugasan untuk kombinasi mata pelajaran dan kelas tersebut.' },
-        { status: 403 }
-      );
-    }
-
-    const existingGrade = await prisma.grade.findFirst({
-      where: {
-        studentId: student.id,
-        classLevel,
-        major,
-        jenisPenilaian,
-        subject,
-        semester,
-        teacherId: teacher.id,
-      },
-    });
-
-    let grade;
-    if (existingGrade) {
-      grade = await prisma.grade.update({
-        where: { id: existingGrade.id },
-        data: {
-          nilai1: nilai1 || null,
-          nilai2: nilai2 || null,
-          nilai3: nilai3 || null,
-          nilaiAkhir: nilaiAkhir || null,
-          userId: teacher.userId,
-        },
-      });
+      if (!teacher) {
+        // Find teacher assigned to this subject and class
+        const assignment = await prisma.teachingAssignment.findFirst({
+          where: {
+            subject: commonSubject,
+            ...(commonClassName ? { className: commonClassName } : {}),
+          },
+          include: { teacher: { include: { user: true, teachingAssignments: true } } },
+        });
+        teacher = assignment?.teacher || await prisma.teacher.findFirst({ include: { user: true, teachingAssignments: true } });
+      }
+      if (!teacher) {
+        return NextResponse.json(
+          { error: 'Belum ada data guru di sistem admin untuk dikaitkan dengan nilai.' },
+          { status: 400 }
+        );
+      }
     } else {
-      grade = await prisma.grade.create({
-        data: {
-          studentId: student.id,
-          subject,
-          classLevel,
-          major,
-          jenisPenilaian,
-          semester,
-          nilai1: nilai1 || null,
-          nilai2: nilai2 || null,
-          nilai3: nilai3 || null,
-          nilaiAkhir: nilaiAkhir || null,
-          teacherId: teacher.id,
-          userId: teacher.userId,
+      teacher = await prisma.teacher.findFirst({
+        where: {
+          OR: [
+            { userId: session.uid },
+            session.nip ? { user: { nip: session.nip } } : null,
+            session.name ? { user: { name: session.name } } : null,
+          ].filter(Boolean) as any[],
         },
+        include: { user: true, teachingAssignments: true },
       });
+
+      if (!teacher) {
+        return NextResponse.json(
+          { error: 'Guru aktif pada session tidak ditemukan di database admin.' },
+          { status: 403 }
+        );
+      }
+
+      if (teacher.user.role !== 'TEACHER') {
+        return NextResponse.json(
+          { error: 'Hanya akun guru yang boleh menyimpan nilai.' },
+          { status: 403 }
+        );
+      }
+
+      const matchedAssignment = teacher.teachingAssignments.find((assignment) => {
+        if (assignment.subject !== commonSubject) return false;
+        if (commonClassName) {
+          return assignment.className === commonClassName;
+        }
+        return assignment.classLevel === commonClassLevel && assignment.majorCode === commonMajor;
+      });
+
+      if (!matchedAssignment) {
+        return NextResponse.json(
+          { error: 'Guru tidak memiliki penugasan untuk kombinasi mata pelajaran dan kelas tersebut.' },
+          { status: 403 }
+        );
+      }
     }
 
-    return NextResponse.json(grade, { status: 201 });
+    // Process saving in a single atomic transaction
+    const results = await prisma.$transaction(async (tx) => {
+      // Preload student IDs
+      const studentIds = items.map((it) => it.studentId).filter(Boolean) as string[];
+      const studentsById = new Map();
+      if (studentIds.length > 0) {
+        const found = await tx.student.findMany({
+          where: { id: { in: studentIds } },
+        });
+        found.forEach((s) => studentsById.set(s.id, s));
+      }
+
+      // Preload existing grades for these students
+      const existingGrades = await tx.grade.findMany({
+        where: {
+          studentId: { in: studentIds.length > 0 ? studentIds : undefined },
+          subject: commonSubject,
+          semester: commonSemester,
+          jenisPenilaian: commonJenisPenilaian,
+          classLevel: commonClassLevel,
+          major: commonMajor,
+        },
+      });
+
+      const gradeByStudentId = new Map(existingGrades.map((g) => [g.studentId, g]));
+      const savedList = [];
+
+      for (const item of items) {
+        const sName = item.studentName?.trim();
+        if (!sName && !item.studentId) continue;
+
+        let student = item.studentId ? studentsById.get(item.studentId) : null;
+        if (!student && sName) {
+          student = await tx.student.findFirst({
+            where: {
+              name: sName,
+              ...(commonClassName
+                ? { className: commonClassName }
+                : { className: { startsWith: `${commonClassLevel} ${commonMajor}` } }),
+            },
+          });
+        }
+
+        if (!student) continue;
+
+        const existing = gradeByStudentId.get(student.id) || await tx.grade.findFirst({
+          where: {
+            studentId: student.id,
+            subject: commonSubject,
+            semester: commonSemester,
+            jenisPenilaian: commonJenisPenilaian,
+            classLevel: commonClassLevel,
+            major: commonMajor,
+          },
+        });
+
+        const n1 = item.nilai1 ? String(item.nilai1).trim() : null;
+        const n2 = item.nilai2 ? String(item.nilai2).trim() : null;
+        const n3 = item.nilai3 ? String(item.nilai3).trim() : null;
+        const nAkhir = item.nilaiAkhir ? String(item.nilaiAkhir).trim() : null;
+
+        if (existing) {
+          const updated = await tx.grade.update({
+            where: { id: existing.id },
+            data: {
+              nilai1: n1 || null,
+              nilai2: n2 || null,
+              nilai3: n3 || null,
+              nilaiAkhir: nAkhir || null,
+              teacherId: teacher.id,
+              userId: teacher.userId,
+            },
+          });
+          savedList.push(updated);
+        } else {
+          const created = await tx.grade.create({
+            data: {
+              studentId: student.id,
+              subject: commonSubject,
+              classLevel: commonClassLevel,
+              major: commonMajor,
+              jenisPenilaian: commonJenisPenilaian,
+              semester: commonSemester,
+              nilai1: n1 || null,
+              nilai2: n2 || null,
+              nilai3: n3 || null,
+              nilaiAkhir: nAkhir || null,
+              teacherId: teacher.id,
+              userId: teacher.userId,
+            },
+          });
+          savedList.push(created);
+        }
+      }
+
+      return savedList;
+    });
+
+    if (isBatch) {
+      return NextResponse.json({
+        message: `Berhasil menyimpan nilai untuk ${results.length} siswa.`,
+        savedCount: results.length,
+      }, { status: 200 });
+    }
+
+    return NextResponse.json(results[0] || null, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Session login tidak valid.' }, { status: 401 });
     }
     console.error('Error saving grade:', error);
-    return NextResponse.json({ error: 'Failed to save grade' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Gagal menyimpan nilai' }, { status: 500 });
   }
 }

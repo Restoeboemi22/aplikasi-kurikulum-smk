@@ -111,11 +111,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const sessionUser = await syncServerSession(fbUser);
             setUser(sessionUser);
           } catch {
+            // Jika sync ke server juga gagal (misalnya akun terhapus di database tapi masih ada di cache Firebase),
+            // bersihkan cache otomatis (cookie & indexDB) agar tidak terjadi infinite spinner loop.
             setUser(null);
+            await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
+            await signOut(getAuthSafe()).catch(() => null);
           }
         }
       } else {
         setUser(null);
+        // Pastikan cookie dihapus jika state Firebase kosong agar tidak terjebak infinite redirect oleh middleware
+        await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
       }
       setLoading(false);
     });

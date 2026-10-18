@@ -95,10 +95,51 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const existingSubject = await prisma.subject.findUnique({
+      where: { id },
+    });
+
+    if (!existingSubject) {
+      return NextResponse.json(
+        { error: 'Mata pelajaran tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
     const subject = await prisma.subject.update({
       where: { id },
       data: { code, name }
     });
+
+    // Synchronize subject name change across existing operational records
+    if (existingSubject.name !== name) {
+      await Promise.allSettled([
+        prisma.grade.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+        prisma.teachingObjective.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+        prisma.teachingAssignment.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+        prisma.schedule.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+        prisma.journal.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+        prisma.curriculumSubmission.updateMany({
+          where: { subject: existingSubject.name },
+          data: { subject: name },
+        }),
+      ]);
+    }
     
     return NextResponse.json(subject);
   } catch (error) {

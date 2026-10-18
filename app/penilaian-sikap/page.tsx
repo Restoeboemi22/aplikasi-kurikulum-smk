@@ -55,8 +55,20 @@ export default function PenilaianSikapPage() {
   const [teacherLoading, setTeacherLoading] = useState(true);
   const [teacherError, setTeacherError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "Ada data nilai yang belum disimpan. Yakin ingin keluar?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
   const academicYearOptions = getAcademicYearOptions();
   const subjectOptions =
     role === "ADMIN" ? subjectCatalog : getTeacherSubjectOptions(currentTeacher);
@@ -198,7 +210,7 @@ export default function PenilaianSikapPage() {
         const studentData = await studentRes.json();
         const gradeData: GradeRecord[] = await gradeRes.json();
         const gradeMap = new Map(gradeData.map((grade) => [grade.studentId, grade]));
-        const filteredStudents = studentData.filter((s: Student) => {
+        let filteredStudents = studentData.filter((s: Student) => {
           const className = s.className || "";
           return className === selectedClass.className;
         }).map((s: any) => ({
@@ -209,6 +221,35 @@ export default function PenilaianSikapPage() {
           className: s.className,
           nilaiAkhir: gradeMap.get(s.id)?.nilaiAkhir || ""
         }));
+
+        const draftKey = `draft_grade_SIKAP_${selectedClassId}_${selectedSubject}_${selectedSemester}_${selectedAcademicYear}`;
+        if (typeof window !== "undefined") {
+          const savedDraft = localStorage.getItem(draftKey);
+          if (savedDraft) {
+            try {
+              const draftData = JSON.parse(savedDraft);
+              if (Array.isArray(draftData) && draftData.length > 0) {
+                const draftMap = new Map(draftData.map((d: any) => [d.id, d]));
+                let hasDraftDiff = false;
+                filteredStudents = filteredStudents.map((s: Student) => {
+                  const draft = draftMap.get(s.id);
+                  if (draft && draft.nilaiAkhir !== undefined && draft.nilaiAkhir !== s.nilaiAkhir) {
+                    hasDraftDiff = true;
+                    return { ...s, nilaiAkhir: draft.nilaiAkhir };
+                  }
+                  return s;
+                });
+                if (hasDraftDiff) {
+                  setIsDirty(true);
+                  setMessage({ text: "Draft ketikan sebelumnya berhasil dipulihkan otomatis dari browser.", type: "success" });
+                }
+              }
+            } catch (err) {
+              console.error("Error reading draft:", err);
+            }
+          }
+        }
+
         setStudents(filteredStudents);
       }
     } catch (error) {
@@ -251,6 +292,7 @@ export default function PenilaianSikapPage() {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
+      setIsDirty(true);
       setStudents((prevStudents) => {
         const updatedStudents = [...prevStudents];
         data.forEach((row: any) => {
@@ -268,6 +310,12 @@ export default function PenilaianSikapPage() {
             };
           }
         });
+
+        if (typeof window !== "undefined" && selectedClassId && selectedSubject) {
+          const draftKey = `draft_grade_SIKAP_${selectedClassId}_${selectedSubject}_${selectedSemester}_${selectedAcademicYear}`;
+          localStorage.setItem(draftKey, JSON.stringify(updatedStudents));
+        }
+
         return updatedStudents;
       });
     };
@@ -276,16 +324,24 @@ export default function PenilaianSikapPage() {
   };
 
   const updateField = (id: string, field: keyof Student, value: string) => {
-    setStudents((prevStudents) =>
-      prevStudents.map((s) =>
+    setIsDirty(true);
+    setStudents((prevStudents) => {
+      const updated = prevStudents.map((s) =>
         s.id === id
           ? {
               ...s,
               [field]: field.startsWith("nilai") ? clampScore(value) : value,
             }
           : s
-      )
-    );
+      );
+
+      if (typeof window !== "undefined" && selectedClassId && selectedSubject) {
+        const draftKey = `draft_grade_SIKAP_${selectedClassId}_${selectedSubject}_${selectedSemester}_${selectedAcademicYear}`;
+        localStorage.setItem(draftKey, JSON.stringify(updated));
+      }
+
+      return updated;
+    });
   };
 
   const handleKirim = async () => {
@@ -304,7 +360,7 @@ export default function PenilaianSikapPage() {
       return;
     }
 
-    if (!currentTeacher) {
+    if (role !== "ADMIN" && !currentTeacher) {
       setMessage({ text: "Akun ini belum terhubung ke profil guru, jadi belum bisa mengirim nilai.", type: "error" });
       setTimeout(() => setMessage(null), 5000);
       return;
@@ -314,32 +370,38 @@ export default function PenilaianSikapPage() {
     setMessage(null);
 
     try {
-      for (const student of students) {
-        if (!student.name.trim()) continue;
-
-        const response = await fetch("/api/grades", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+      const response = await fetch("/api/grades", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          className: selectedClass.className,
+          classLevel: selectedClass.grade,
+          major: selectedClass.majorCode,
+          subject: selectedSubject,
+          semester: buildSemesterLabel(selectedSemester, selectedAcademicYear),
+          jenisPenilaian: "SIKAP",
+          items: students.map((student) => ({
+            studentId: student.id,
             studentName: student.name,
-            classLevel: selectedClass.grade,
-            major: selectedClass.majorCode,
-            subject: selectedSubject,
-            semester: buildSemesterLabel(selectedSemester, selectedAcademicYear),
-            jenisPenilaian: "SIKAP",
-            nilaiAkhir: student.nilaiAkhir,
-          }),
-        });
+            nilaiAkhir: student.nilaiAkhir || null,
+          })),
+        }),
+      });
 
-        if (!response.ok) {
-          const result = await response.json().catch(() => null);
-          throw new Error(result?.error || `Gagal mengirim nilai Sikap untuk ${student.name}.`);
-        }
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.error || "Gagal menyimpan data penilaian Sikap.");
       }
 
-      setMessage({ text: "Data penilaian Sikap berhasil dikirim ke admin!", type: "success" });
+      setIsDirty(false);
+      if (typeof window !== "undefined" && selectedClassId && selectedSubject) {
+        const draftKey = `draft_grade_SIKAP_${selectedClassId}_${selectedSubject}_${selectedSemester}_${selectedAcademicYear}`;
+        localStorage.removeItem(draftKey);
+      }
+
+      setMessage({ text: "Semua data penilaian Sikap berhasil disimpan!", type: "success" });
     } catch (error) {
       console.error(error);
       setMessage({ text: error instanceof Error ? error.message : "Gagal mengirim data!", type: "error" });
@@ -465,8 +527,15 @@ export default function PenilaianSikapPage() {
         </div>
       ) : (
         <>
-          {role !== "ADMIN" && (
-            <div className="flex items-center justify-end gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${isDirty ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                <span className={`w-2 h-2 rounded-full ${isDirty ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                {isDirty ? "Ada perubahan belum disimpan" : "Semua nilai tersimpan"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm"
@@ -491,12 +560,12 @@ export default function PenilaianSikapPage() {
               <button
                 onClick={handleKirim}
                 disabled={isLoading}
-                className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
-                <Save size={16} /> {isLoading ? "Mengirim..." : "Kirim"}
+                <Save size={16} /> {isLoading ? "Menyimpan..." : "Simpan Nilai"}
               </button>
             </div>
-          )}
+          </div>
 
           <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
             <table className="border-collapse text-xs w-full">
@@ -521,6 +590,22 @@ export default function PenilaianSikapPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${isDirty ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+                <span className={`w-2 h-2 rounded-full ${isDirty ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                {isDirty ? "Ada perubahan belum disimpan" : "Semua nilai tersimpan aman"}
+              </span>
+            </div>
+            <button
+              onClick={handleKirim}
+              disabled={isLoading}
+              className="flex items-center gap-2 bg-pink-600 text-white px-5 py-2.5 rounded-lg hover:bg-pink-700 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+            >
+              <Save size={16} /> {isLoading ? "Menyimpan..." : "Simpan Nilai Sikap"}
+            </button>
           </div>
         </>
       )}

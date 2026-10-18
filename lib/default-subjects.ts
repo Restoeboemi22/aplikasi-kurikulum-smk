@@ -4,7 +4,7 @@ export type DefaultSubject = {
 };
 
 export const DEFAULT_SUBJECTS: DefaultSubject[] = [
-  { code: "PABP", name: "Pendidikan Agama dan Budi Pekerti" },
+  { code: "PABP", name: "Pendidikan Agama Islam dan Budi Pekerti" },
   { code: "PPS", name: "Pendidikan Pancasila" },
   { code: "BIN", name: "Bahasa Indonesia" },
   { code: "PJOK", name: "Pendidikan Jasmani , Olah Raga dan Kesehatan" },
