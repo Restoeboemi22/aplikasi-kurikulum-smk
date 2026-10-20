@@ -227,15 +227,16 @@ export async function GET(request: NextRequest) {
         subjectGradesMap.set(subject.name, matched);
       });
 
-      // Objectives by subject
-      const objectivesBySubject = teachingObjectives.reduce((map, item) => {
-        const targetSub = subjectList.find((s) => isMatchingGrade(item.subject, s));
-        const key = targetSub ? targetSub.name : item.subject;
-        const objectives = map.get(key) ?? [];
-        objectives.push(item.objectiveText);
-        map.set(key, objectives);
-        return map;
-      }, new Map<string, string[]>());
+      // Objectives by subject with teacher prioritization
+      const objectivesBySubject = new Map<string, string[]>();
+      subjectList.forEach((subject) => {
+        const gradesForSub = subjectGradesMap.get(subject.name) ?? [];
+        const teacherIdsInGrades = new Set(gradesForSub.map((g) => g.teacherId).filter(Boolean));
+        const matchingTps = teachingObjectives.filter((tp) => isMatchingGrade(tp.subject, subject));
+        const teacherMatchedTps = matchingTps.filter((tp) => teacherIdsInGrades.has(tp.teacherId));
+        const finalTps = teacherMatchedTps.length > 0 ? teacherMatchedTps : matchingTps;
+        objectivesBySubject.set(subject.name, finalTps.map((t) => t.objectiveText));
+      });
 
       // Bangun baris nilai
       const rows = subjectList.map((subject, index) => {

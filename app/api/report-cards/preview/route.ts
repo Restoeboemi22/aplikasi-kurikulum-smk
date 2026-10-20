@@ -211,47 +211,26 @@ export async function GET(request: NextRequest) {
     });
 
     // 7. Teaching objectives lookup
-    const objectiveFilters = subjectList
-      .map((subject) => {
-        const gradesForSub = subjectGradesMap.get(subject.name) ?? [];
-        const teacherId = gradesForSub.find((item) => item.teacherId)?.teacherId;
-        if (!teacherId || !student.className) return null;
-
-        const possibleNames = Array.from(new Set([subject.name, ...gradesForSub.map((g) => g.subject)]));
-        return possibleNames.map((name) => ({
-          teacherId,
-          subject: name,
-          className: student.className!,
-          academicYear,
-          semester,
-        }));
-      })
-      .filter((items): items is Array<{
-        teacherId: string;
-        subject: string;
-        className: string;
-        academicYear: string;
-        semester: SemesterTerm;
-      }> => items !== null)
-      .flat();
-
-    const teachingObjectives = objectiveFilters.length
+    const classTeachingObjectives = student.className
       ? await prisma.teachingObjective.findMany({
           where: {
-            OR: objectiveFilters,
+            className: student.className,
+            academicYear,
+            semester,
           },
           orderBy: [{ subject: "asc" }, { orderNo: "asc" }],
         })
       : [];
 
-    const objectivesBySubject = teachingObjectives.reduce((map, item) => {
-      const targetSub = subjectList.find((s) => isMatchingGrade(item.subject, s));
-      const key = targetSub ? targetSub.name : item.subject;
-      const objectives = map.get(key) ?? [];
-      objectives.push(item.objectiveText);
-      map.set(key, objectives);
-      return map;
-    }, new Map<string, string[]>());
+    const objectivesBySubject = new Map<string, string[]>();
+    subjectList.forEach((subject) => {
+      const gradesForSub = subjectGradesMap.get(subject.name) ?? [];
+      const teacherIdsInGrades = new Set(gradesForSub.map((g) => g.teacherId).filter(Boolean));
+      const matchingTps = classTeachingObjectives.filter((tp) => isMatchingGrade(tp.subject, subject));
+      const teacherMatchedTps = matchingTps.filter((tp) => teacherIdsInGrades.has(tp.teacherId));
+      const finalTps = teacherMatchedTps.length > 0 ? teacherMatchedTps : matchingTps;
+      objectivesBySubject.set(subject.name, finalTps.map((t) => t.objectiveText));
+    });
 
     // 8. Build rows
     const rows = subjectList.map((subject, index) => {
