@@ -92,7 +92,7 @@ export const formatNumber = (value: number | null) => (value === null ? "-" : va
 export const formatRounded = (value: number | null) => (value === null ? "-" : String(value));
 
 export const getPromotionStatus = (preview: PreviewResponse | null, reportVariant: "STS" | "SAS") => {
-  if (reportVariant === "STS" || preview?.filter.semester === "Ganjil") {
+  if (reportVariant === "STS") {
     return "-";
   }
   if (!preview || preview.summary.averageScore === null) {
@@ -618,18 +618,11 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
                   <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
                     {preview.classInfo.classLevel === "XII" ? "Keterangan Kelulusan" : "Keterangan Kenaikan Kelas"}
                   </div>
-                  <div className="report-panel-body px-3 py-1.5 text-[12px] text-slate-700">
-                    {reportVariant === "STS" || preview.filter.semester === "Ganjil" ? (
-                      <div className="flex items-center justify-between text-[12px]">
-                        <span className="text-[12px] text-slate-600">
-                          {reportVariant === "STS"
-                            ? "Keputusan kenaikan kelas / kelulusan berlaku pada akhir Semester Genap."
-                            : "Keputusan kenaikan kelas / kelulusan ditetapkan pada akhir Semester Genap."}
-                        </span>
-                        <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">
-                          -
-                        </span>
-                      </div>
+                  <div className="report-panel-body px-3 py-1.5 text-[12px] text-slate-700 min-h-[46px] flex items-center justify-center">
+                    {reportVariant === "STS" ? (
+                      <p className="text-center text-[12px] text-slate-600 leading-snug">
+                        Keputusan kenaikan kelas / kelulusan berlaku pada akhir Semester Genap.
+                      </p>
                     ) : (
                       <div className="text-center py-0.5">
                         <p className="mb-0.5 text-[12px] text-slate-600">
