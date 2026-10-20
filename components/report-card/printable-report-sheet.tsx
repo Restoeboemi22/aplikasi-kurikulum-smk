@@ -368,10 +368,57 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
               </div>
             )}
           </div>
+
+          {/* Pengembangan Diri dan Kepribadian (Diletakkan di Halaman 1 agar seimbang) */}
+          <div className="report-panel mt-2.5 overflow-hidden rounded-xl border border-slate-300">
+            <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+              Pengembangan Diri dan Kepribadian
+            </div>
+            <div className="report-panel-body p-2 text-[12px] text-slate-700">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div>
+                  <p className="report-section-title mb-1 text-[12px] font-semibold text-slate-800">
+                    Pengembangan Diri
+                  </p>
+                  <div className="report-stack space-y-1">
+                    {preview.notes.development.map((item) => (
+                      <div
+                        key={item.activity}
+                        className="report-row-box flex items-center justify-between gap-2 rounded-lg border px-2 py-0.5"
+                      >
+                        <span className="report-row-box-label text-[12px]">{item.activity}</span>
+                        <span className="report-row-box-value text-[12px] font-semibold">
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="report-section-title mb-1 text-[12px] font-semibold text-slate-800">
+                    Kepribadian
+                  </p>
+                  <div className="report-stack space-y-1">
+                    {preview.notes.personality.map((item) => (
+                      <div
+                        key={item.aspect}
+                        className="report-row-box flex items-center justify-between gap-2 rounded-lg border px-2 py-0.5"
+                      >
+                        <span className="report-row-box-label text-[12px]">{item.aspect}</span>
+                        <span className="report-row-box-value text-[12px] font-semibold">
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* =========================================================================
-            HALAMAN 2: KELOMPOK B (KEJURUAN), PENGEMBANGAN DIRI, ABSENSI, KENAIKAN KELAS, TTD
+            HALAMAN 2: KELOMPOK B (KEJURUAN), ABSENSI & CATATAN, KENAIKAN KELAS, TTD
         ========================================================================= */}
         <div
           className={`report-page report-page-2 bg-white ${
@@ -537,125 +584,87 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
             ))}
           </div>
 
-          {/* Pengembangan Diri, Absensi & Catatan Wali Kelas */}
+          {/* Absensi, Kenaikan Kelas & Catatan Wali Kelas (Dua Kolom Hemat Ruang) */}
           <div className="report-lower-grid mt-2">
-            <div className="grid gap-2.5 lg:grid-cols-2">
-              <div className="report-panel overflow-hidden rounded-xl border border-slate-300">
-                <div className="report-panel-header bg-slate-100 px-3 py-1.5 text-[12px] font-bold uppercase tracking-wide text-slate-800">
-                  Pengembangan Diri dan Kepribadian
-                </div>
-                <div className="report-panel-body p-2 text-[12px] text-slate-700">
-                  <div className="mb-1.5">
-                    <p className="report-section-title mb-1 text-[12px] font-semibold text-slate-800">
-                      Pengembangan Diri
-                    </p>
-                    <div className="report-stack space-y-1">
-                      {preview.notes.development.map((item) => (
-                        <div
-                          key={item.activity}
-                          className="report-row-box flex items-center justify-between gap-2 rounded-lg border px-2 py-1"
-                        >
-                          <span className="report-row-box-label text-[12px]">{item.activity}</span>
-                          <span className="report-row-box-value text-[12px] font-semibold">
-                            {item.value}
-                          </span>
-                        </div>
-                      ))}
+            <div className="grid gap-2.5 lg:grid-cols-2 items-stretch">
+              {/* Kolom Kiri: Absensi & Kenaikan Kelas */}
+              <div className="space-y-2 flex flex-col justify-between">
+                <div className="report-panel overflow-hidden rounded-xl border border-slate-300">
+                  <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                    Absensi / Ketidakhadiran
+                  </div>
+                  <div className="report-panel-body p-2 text-[12px] text-slate-700">
+                    <div className="report-attendance-grid grid grid-cols-3 gap-2">
+                      <div className="report-attendance-card rounded-lg border bg-slate-50 p-1 text-center">
+                        <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                          Sakit
+                        </p>
+                        <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
+                          {preview.notes.attendance.sakit}
+                        </p>
+                      </div>
+                      <div className="report-attendance-card rounded-lg border bg-slate-50 p-1 text-center">
+                        <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                          Izin
+                        </p>
+                        <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
+                          {preview.notes.attendance.izin}
+                        </p>
+                      </div>
+                      <div className="report-attendance-card rounded-lg border bg-slate-50 p-1 text-center">
+                        <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+                          Alpha
+                        </p>
+                        <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
+                          {preview.notes.attendance.alpha}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <p className="report-section-title mb-1 text-[12px] font-semibold text-slate-800">
-                      Kepribadian
-                    </p>
-                    <div className="report-stack space-y-1">
-                      {preview.notes.personality.map((item) => (
-                        <div
-                          key={item.aspect}
-                          className="report-row-box flex items-center justify-between gap-2 rounded-lg border px-2 py-1"
-                        >
-                          <span className="report-row-box-label text-[12px]">{item.aspect}</span>
-                          <span className="report-row-box-value text-[12px] font-semibold">
-                            {item.value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                </div>
+
+                {/* Kartu Kenaikan Kelas / Kelulusan */}
+                <div className="report-promotion-card overflow-hidden rounded-xl border border-slate-300">
+                  <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                    {preview.classInfo.classLevel === "XII" ? "Keterangan Kelulusan" : "Keterangan Kenaikan Kelas"}
+                  </div>
+                  <div className="report-panel-body px-3 py-1.5 text-[12px] text-slate-700">
+                    {reportVariant === "STS" || preview.filter.semester === "Ganjil" ? (
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="text-[12px] text-slate-600">
+                          {reportVariant === "STS"
+                            ? "Keputusan kenaikan kelas / kelulusan berlaku pada akhir Semester Genap."
+                            : "Keputusan kenaikan kelas / kelulusan ditetapkan pada akhir Semester Genap."}
+                        </span>
+                        <span className="rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[12px] font-bold text-slate-700">
+                          -
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-center py-0.5">
+                        <p className="mb-0.5 text-[12px] text-slate-600">
+                          Peserta didik dinyatakan:
+                        </p>
+                        <p className="inline-block rounded-lg border border-slate-300 bg-slate-50 px-4 py-0.5 text-[12px] font-black uppercase tracking-wider text-slate-900">
+                          {getPromotionStatus(preview, reportVariant)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="report-panel overflow-hidden rounded-xl border border-slate-300">
-                <div className="report-panel-header bg-slate-100 px-3 py-1.5 text-[12px] font-bold uppercase tracking-wide text-slate-800">
-                  Absensi dan Catatan
+              {/* Kolom Kanan: Catatan Wali Kelas */}
+              <div className="report-panel overflow-hidden rounded-xl border border-slate-300 flex flex-col justify-between">
+                <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                  Catatan Wali Kelas
                 </div>
-                <div className="report-panel-body space-y-2 p-2 text-[12px] text-slate-700">
-                  <div className="report-attendance-grid grid grid-cols-3 gap-2">
-                    <div className="report-attendance-card rounded-lg border bg-slate-50 p-1.5 text-center">
-                      <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                        Sakit
-                      </p>
-                      <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
-                        {preview.notes.attendance.sakit}
-                      </p>
-                    </div>
-                    <div className="report-attendance-card rounded-lg border bg-slate-50 p-1.5 text-center">
-                      <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                        Izin
-                      </p>
-                      <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
-                        {preview.notes.attendance.izin}
-                      </p>
-                    </div>
-                    <div className="report-attendance-card rounded-lg border bg-slate-50 p-1.5 text-center">
-                      <p className="report-attendance-card-label text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                        Alpha
-                      </p>
-                      <p className="report-attendance-card-value mt-0.5 text-[12px] font-bold text-slate-900">
-                        {preview.notes.attendance.alpha}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-0.5 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
-                      Catatan Wali Kelas:
-                    </p>
-                    <div className="report-note-box rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[12px] leading-snug text-amber-900">
-                      {preview.notes.homeroomNote || "Tingkatkan terus prestasi dan semangat belajarmu."}
-                    </div>
+                <div className="report-panel-body p-2 flex-1 flex flex-col justify-center text-[12px]">
+                  <div className="report-note-box rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900 min-h-[75px] flex items-center">
+                    {preview.notes.homeroomNote || "Tingkatkan terus prestasi dan semangat belajarmu."}
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Kartu Kenaikan Kelas / Kelulusan */}
-          <div className="report-promotion-card mt-2 overflow-hidden rounded-xl border border-slate-300">
-            <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
-              {preview.classInfo.classLevel === "XII" ? "Keterangan Kelulusan" : "Keterangan Kenaikan Kelas"}
-            </div>
-            <div className="report-panel-body px-3 py-1.5 text-[12px] text-slate-700">
-              {reportVariant === "STS" || preview.filter.semester === "Ganjil" ? (
-                <div className="flex items-center justify-between text-[12px]">
-                  <span className="text-[12px] text-slate-600">
-                    {reportVariant === "STS"
-                      ? "Keputusan kenaikan kelas / kelulusan hanya berlaku pada akhir tahun ajaran (Semester Genap)."
-                      : "Keputusan kenaikan kelas / kelulusan ditetapkan pada akhir Semester Genap."}
-                  </span>
-                  <span className="rounded-md border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[12px] font-bold text-slate-700">
-                    -
-                  </span>
-                </div>
-              ) : (
-                <div className="text-center py-0.5">
-                  <p className="mb-1 text-[12px] text-slate-600">
-                    Berdasarkan hasil belajar yang dicapai pada Tahun Pelajaran {preview.filter.academicYear}, peserta didik dinyatakan:
-                  </p>
-                  <p className="inline-block rounded-lg border border-slate-300 bg-slate-50 px-5 py-1 text-[12px] font-black uppercase tracking-wider text-slate-900">
-                    {getPromotionStatus(preview, reportVariant)}
-                  </p>
-                </div>
-              )}
             </div>
           </div>
 

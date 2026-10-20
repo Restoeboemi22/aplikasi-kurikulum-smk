@@ -142,20 +142,39 @@ async function exportElementTo2PagePdf(element: HTMLElement) {
 
   // A4 = 210mm x 297mm
   // Lebar cetak: margin kiri 8mm, margin kanan 8mm => lebar 194mm
+  // Batas tinggi cetak aman: 297mm - 16mm (margin atas & bawah 8mm) = 281mm
   const pdfWidth = 194;
   const leftMargin = 8;
   const topMargin = 8;
+  const maxContentHeight = 281;
 
-  const height1 = (canvas1.height * pdfWidth) / canvas1.width;
-  const height2 = (canvas2.height * pdfWidth) / canvas2.width;
+  let width1 = pdfWidth;
+  let height1 = (canvas1.height * pdfWidth) / canvas1.width;
+  let x1 = leftMargin;
+  if (height1 > maxContentHeight) {
+    const scale = maxContentHeight / height1;
+    height1 = maxContentHeight;
+    width1 = pdfWidth * scale;
+    x1 = (210 - width1) / 2;
+  }
+
+  let width2 = pdfWidth;
+  let height2 = (canvas2.height * pdfWidth) / canvas2.width;
+  let x2 = leftMargin;
+  if (height2 > maxContentHeight) {
+    const scale = maxContentHeight / height2;
+    height2 = maxContentHeight;
+    width2 = pdfWidth * scale;
+    x2 = (210 - width2) / 2;
+  }
 
   // Halaman 1
   pdf.addImage(
     canvas1.toDataURL("image/jpeg", 0.98),
     "JPEG",
-    leftMargin,
+    x1,
     topMargin,
-    pdfWidth,
+    width1,
     height1
   );
 
@@ -164,9 +183,9 @@ async function exportElementTo2PagePdf(element: HTMLElement) {
   pdf.addImage(
     canvas2.toDataURL("image/jpeg", 0.98),
     "JPEG",
-    leftMargin,
+    x2,
     topMargin,
-    pdfWidth,
+    width2,
     height2
   );
 
@@ -312,13 +331,20 @@ export default function ReportCardPage({
       setViewer(result.viewer);
       setClasses(result.classes);
 
-      setSelectedClassName((current) =>
-        result.classes.some((item: ClassOption) => item.className === current)
+      const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const targetClassFromUrl = urlParams?.get("className") || urlParams?.get("kelas");
+
+      setSelectedClassName((current) => {
+        if (targetClassFromUrl && result.classes.some((item: ClassOption) => item.className.toLowerCase() === targetClassFromUrl.toLowerCase())) {
+          const matched = result.classes.find((item: ClassOption) => item.className.toLowerCase() === targetClassFromUrl.toLowerCase());
+          return matched ? matched.className : current;
+        }
+        return result.classes.some((item: ClassOption) => item.className === current)
           ? current
           : result.classes.length === 1
           ? result.classes[0].className
-          : ""
-      );
+          : "";
+      });
     } catch (error: any) {
       setErrorMessage(error.message || "Gagal memuat opsi Cetak Raport.");
     } finally {
@@ -348,7 +374,11 @@ export default function ReportCardPage({
       setStudents(result.students);
 
       setSelectedStudentId((current) =>
-        result.students.some((student: StudentOption) => student.id === current) ? current : ""
+        result.students.some((student: StudentOption) => student.id === current)
+          ? current
+          : result.students.length > 0
+          ? result.students[0].id
+          : ""
       );
       setPreview(null);
     } catch (error: any) {
@@ -763,6 +793,7 @@ export default function ReportCardPage({
               Kelas
             </label>
             <select
+              id="filter-class"
               value={selectedClassName}
               onChange={(e) => setSelectedClassName(e.target.value)}
               disabled={isLoadingOptions}
@@ -782,6 +813,7 @@ export default function ReportCardPage({
               Siswa
             </label>
             <select
+              id="filter-student"
               value={selectedStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
               disabled={!selectedClassName || isLoadingStudents}
@@ -800,6 +832,7 @@ export default function ReportCardPage({
         {/* Action Buttons */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
+            id="btn-preview"
             onClick={loadPreview}
             disabled={!selectedStudentId || isLoadingPreview}
             className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -809,6 +842,7 @@ export default function ReportCardPage({
           </button>
 
           <button
+            id="btn-download-pdf"
             onClick={handlePrint}
             disabled={!preview || isGeneratingPdf}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
