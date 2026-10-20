@@ -63,6 +63,8 @@ const PATH_TO_MENU_ID: Record<string, string> = {
   "/penilaian-raport-tkr-sas": "penilaian-raport-tkr-sas",
   "/cetak-dkn": "cetak-dkn",
   "/kelola-akun": "kelola-akun",
+  "/monitoring-guru": "monitoring-guru",
+  "/pelengkap-raport": "pelengkap-raport",
 };
 
 const ADMIN_ONLY_PATHS = new Set([
@@ -70,6 +72,7 @@ const ADMIN_ONLY_PATHS = new Set([
   "/jadwal-pelajaran",
   "/jurnal",
   "/nilai",
+  "/monitoring-guru",
 ]);
 
 export const PUBLIC_PATHS = new Set(["/login"]);
@@ -83,7 +86,11 @@ function hasHomeroomMajorAccess(homeroomClassNames: string[] = [], targetMajorCo
   const expected = ` ${targetMajorCode} `;
   return homeroomClassNames.some((className) => {
     const normalized = String(className || "").trim().toUpperCase();
-    return normalized.includes(expected) || normalized.endsWith(` ${targetMajorCode}`);
+    return (
+      normalized.includes(expected) ||
+      normalized.endsWith(` ${targetMajorCode}`) ||
+      normalized.includes(targetMajorCode)
+    );
   });
 }
 
@@ -91,6 +98,9 @@ export function canAccessMenu(role: Role, menuId: string, context: MenuAccessCon
   if (role === "ADMIN") return true;
   const homeroomClassNames = context.homeroomClassNames ?? [];
   if (menuId === "master-nilai") {
+    return Boolean(context.isHomeroomTeacher);
+  }
+  if (menuId === "pelengkap-raport") {
     return Boolean(context.isHomeroomTeacher);
   }
   if (menuId === "penilaian-raport") {

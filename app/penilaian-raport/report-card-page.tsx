@@ -3,13 +3,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  CheckCircle2,
   Download,
   Eye,
+  FileArchive,
   FileSearch,
+  FileText,
+  FolderDown,
   GraduationCap,
   Loader2,
+  Printer,
+  Users,
+  X,
 } from "lucide-react";
-import reportHeaderImage from "../../KOP SMK.png";
 import {
   buildSemesterLabel,
   getAcademicYearOptions,
@@ -18,6 +24,10 @@ import {
   type SemesterTerm,
 } from "@/lib/grade-period";
 import { getReportProfile, type ReportMajorCode } from "@/lib/report-profiles";
+import {
+  PrintableReportSheet,
+  type PreviewResponse,
+} from "@/components/report-card/printable-report-sheet";
 
 type ViewerInfo = {
   role: "ADMIN" | "TEACHER";
@@ -42,92 +52,6 @@ type StudentOption = {
   className?: string | null;
 };
 
-type PreviewRow = {
-  no: number;
-  groupCode: string;
-  groupName: string;
-  subjectName: string;
-  uhAverage: number | null;
-  tugasAverage: number | null;
-  stsScore: number | null;
-  sasScore: number | null;
-  finalScore: number | null;
-  roundedScore: number | null;
-  sikapScore: string | null;
-  competenceNote: string;
-  isComplete: boolean;
-};
-
-type PreviewResponse = {
-  filter: {
-    academicYear: string;
-    semester: SemesterTerm;
-    semesterLabel: string;
-  };
-  student: {
-    id: string;
-    name: string;
-    nis: string;
-    nisn: string;
-    className: string;
-    phase: string;
-  };
-  classInfo: {
-    classLevel: string;
-    majorCode: string;
-    majorName: string;
-    bidangKeahlian: string;
-    programKeahlian: string;
-    konsentrasiKeahlian: string;
-    homeroomTeacher: string;
-  };
-  schoolInfo: {
-    name: string;
-    title: string;
-    academicYearTitle: string;
-  };
-  summary: {
-    totalScore: number;
-    averageScore: number | null;
-    completedSubjects: number;
-    totalSubjects: number;
-  };
-  groupedRows: Array<{
-    code: string;
-    name: string;
-    items: PreviewRow[];
-  }>;
-  notes: {
-    attendance: {
-      sakit: number;
-      izin: number;
-      alpha: number;
-    };
-    personality: Array<{ aspect: string; value: string }>;
-    development: Array<{ activity: string; value: string }>;
-    homeroomNote: string;
-    location: {
-      city: string;
-      date: string;
-    };
-    signatures: {
-      homeroom: {
-        name: string;
-        title: string;
-      };
-      principal: {
-        name: string;
-        title: string;
-        nip: string;
-      };
-    };
-    finalization: {
-      isFinalized: boolean;
-      finalizedAt: string | null;
-    };
-  };
-};
-
 type SupplementForm = {
   sakit: string;
   izin: string;
@@ -147,9 +71,6 @@ type SupplementForm = {
   principalNip: string;
 };
 
-const formatNumber = (value: number | null) => (value === null ? "-" : value.toFixed(2));
-const formatRounded = (value: number | null) => (value === null ? "-" : String(value));
-
 const createEmptySupplementForm = (): SupplementForm => ({
   sakit: "0",
   izin: "0",
@@ -168,6 +89,98 @@ const createEmptySupplementForm = (): SupplementForm => ({
   principalSignatureTitle: "Kepala Sekolah",
   principalNip: "",
 });
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+/**
+ * Helper render 2 halaman raport ke dokumen jsPDF.
+ * Halaman 1: Kop, Biodata Siswa, & Kelompok A (Umum)
+ * Halaman 2: Kelompok B (Kejuruan), Pengembangan Diri, Absensi, Kenaikan Kelas, & Tanda Tangan
+ * Menjamin tidak ada celah/gap kosong dan tanda tangan selalu muncul utuh di Halaman 2.
+ */
+async function exportElementTo2PagePdf(element: HTMLElement) {
+  const page1El = element.querySelector(".report-page-1") as HTMLElement | null;
+  const page2El = element.querySelector(".report-page-2") as HTMLElement | null;
+
+  if (!page1El || !page2El) {
+    throw new Error("Struktur halaman raport tidak lengkap.");
+  }
+
+  const { jsPDF } = await import("jspdf");
+  const html2canvas = (await import("html2canvas")).default;
+
+  const canvas1 = await html2canvas(page1El, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: "#ffffff",
+  });
+
+  const canvas2 = await html2canvas(page2El, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+    backgroundColor: "#ffffff",
+  });
+
+  const pdf = new jsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: "portrait",
+  });
+
+  // A4 = 210mm x 297mm
+  // Lebar cetak: margin kiri 8mm, margin kanan 8mm => lebar 194mm
+  const pdfWidth = 194;
+  const leftMargin = 8;
+  const topMargin = 8;
+
+  const height1 = (canvas1.height * pdfWidth) / canvas1.width;
+  const height2 = (canvas2.height * pdfWidth) / canvas2.width;
+
+  // Halaman 1
+  pdf.addImage(
+    canvas1.toDataURL("image/jpeg", 0.98),
+    "JPEG",
+    leftMargin,
+    topMargin,
+    pdfWidth,
+    height1
+  );
+
+  // Halaman 2 (dimulai tepat di atas halaman kedua)
+  pdf.addPage();
+  pdf.addImage(
+    canvas2.toDataURL("image/jpeg", 0.98),
+    "JPEG",
+    leftMargin,
+    topMargin,
+    pdfWidth,
+    height2
+  );
+
+  return pdf;
+}
+
+interface BatchProgress {
+  current: number;
+  total: number;
+  percent: number;
+  studentName?: string;
+  statusMessage?: string;
+  isComplete?: boolean;
+}
 
 type ReportCardPageProps = {
   reportMajorCode?: ReportMajorCode;
@@ -201,6 +214,21 @@ export default function ReportCardPage({
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [supplementForm, setSupplementForm] = useState<SupplementForm>(createEmptySupplementForm);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Batch download state
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>({
+    current: 0,
+    total: 0,
+    percent: 0,
+    statusMessage: "",
+  });
+  const [batchRenderStudent, setBatchRenderStudent] = useState<PreviewResponse | null>(null);
+  const batchExportContainerRef = useRef<HTMLDivElement | null>(null);
+  const abortBatchRef = useRef<boolean>(false);
+
   const reportDocumentTitle = useMemo(() => {
     if (!preview) return "";
     const semesterLabel = preview.filter.semester.toUpperCase();
@@ -208,6 +236,7 @@ export default function ReportCardPage({
       ? `Laporan Hasil Belajar Siswa Sumatif Akhir Semester ${semesterLabel}`
       : `Laporan Hasil Belajar Siswa Sumatif Tengah Semester ${semesterLabel}`;
   }, [preview, reportVariant]);
+
   const competenceLabel = reportVariant === "SAS" ? "Capaian Kompetensi" : "Capaian Pembelajaran";
 
   useEffect(() => {
@@ -236,7 +265,8 @@ export default function ReportCardPage({
       sakit: String(preview.notes.attendance.sakit ?? 0),
       izin: String(preview.notes.attendance.izin ?? 0),
       alpha: String(preview.notes.attendance.alpha ?? 0),
-      developmentPramuka: preview.notes.development.find((item) => item.activity === "Pramuka")?.value ?? "-",
+      developmentPramuka:
+        preview.notes.development.find((item) => item.activity === "Pramuka")?.value ?? "-",
       developmentSholatDhuha:
         preview.notes.development.find((item) => item.activity === "Sholat Dhuha")?.value ?? "-",
       personalityAkhlak:
@@ -286,8 +316,8 @@ export default function ReportCardPage({
         result.classes.some((item: ClassOption) => item.className === current)
           ? current
           : result.classes.length === 1
-            ? result.classes[0].className
-            : ""
+          ? result.classes[0].className
+          : ""
       );
     } catch (error: any) {
       setErrorMessage(error.message || "Gagal memuat opsi Cetak Raport.");
@@ -399,7 +429,9 @@ export default function ReportCardPage({
         throw new Error(result?.error || "Gagal menyimpan data pelengkap raport.");
       }
 
-      setSuccessMessage("Data pelengkap raport berhasil disimpan.");
+      setSuccessMessage(
+        "Data pelengkap dan pengesahan raport berhasil disimpan serta otomatis diterapkan untuk semua siswa pada kelas ini."
+      );
       await loadPreview();
     } catch (error: any) {
       setErrorMessage(error.message || "Gagal menyimpan data pelengkap raport.");
@@ -449,112 +481,205 @@ export default function ReportCardPage({
     }
   }
 
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-
+  // Single PDF download for current selected student (2 pages deterministic)
   async function handlePrint() {
-    if (!previewRef.current || !preview) return;
+    if (!preview) return;
 
     setIsGeneratingPdf(true);
     setErrorMessage("");
 
-    let origBorder = "";
-    let origBoxShadow = "";
-    let origBorderRadius = "";
-    let origHeaderBorder = "";
-    let origHeaderBorderRadius = "";
-    let origLowerGridBreak = "";
-    let origLowerGridBreakBefore = "";
-    let headerEl: HTMLDivElement | null = null;
-    let lowerGridEl: HTMLDivElement | null = null;
-
     try {
-      // Dynamically load html2pdf.js from CDN
-      const html2pdfModule = await new Promise<any>((resolve, reject) => {
-        if ((window as any).html2pdf) {
-          resolve((window as any).html2pdf);
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js";
-        script.onload = () => resolve((window as any).html2pdf);
-        script.onerror = () => reject(new Error("Gagal memuat library PDF. Periksa koneksi internet."));
-        document.head.appendChild(script);
-      });
-
-      const el = previewRef.current;
-
-      // Temporarily clean up the element for PDF capture
-      origBorder = el.style.border;
-      origBoxShadow = el.style.boxShadow;
-      origBorderRadius = el.style.borderRadius;
-      el.style.border = "none";
-      el.style.boxShadow = "none";
-      el.style.borderRadius = "0";
-
-      headerEl = el.querySelector(".report-header") as HTMLDivElement | null;
-      if (headerEl) {
-        origHeaderBorder = headerEl.style.border;
-        origHeaderBorderRadius = headerEl.style.borderRadius;
-        headerEl.style.border = "none";
-        headerEl.style.borderRadius = "0";
-      }
-
-      // Force a clean page break before the lower grid (Pengembangan Diri & Absensi)
-      // to keep it side-by-side and correctly aligned on Page 2.
-      lowerGridEl = el.querySelector(".report-lower-grid") as HTMLDivElement | null;
-      if (lowerGridEl) {
-        origLowerGridBreak = lowerGridEl.style.pageBreakBefore;
-        origLowerGridBreakBefore = lowerGridEl.style.breakBefore;
-        lowerGridEl.style.pageBreakBefore = "always";
-        lowerGridEl.style.breakBefore = "page";
-      }
-
-      const studentName = preview.student.name.replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_");
+      const studentName = preview.student.name
+        .replace(/[^a-zA-Z0-9 ]/g, "")
+        .trim()
+        .replace(/\s+/g, "_");
       const semLabel = preview.filter.semester.toUpperCase();
       const fileName = `Raport_${reportVariant}_${semLabel}_${studentName}.pdf`;
 
-      await html2pdfModule()
-        .set({
-          margin: [10, 8, 10, 8],
-          filename: fileName,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            letterRendering: true,
-            scrollX: 0,
-            scrollY: 0,
-          },
-          jsPDF: {
-            unit: "mm",
-            format: "a4",
-            orientation: "portrait",
-          },
-          pagebreak: { mode: ["css", "legacy"] },
-        })
-        .from(el)
-        .save();
+      setBatchRenderStudent(preview);
+      await new Promise((r) => setTimeout(r, 60));
+
+      const container = batchExportContainerRef.current || previewRef.current;
+      if (!container) {
+        throw new Error("Kontainer render tidak ditemukan.");
+      }
+
+      const pdf = await exportElementTo2PagePdf(container);
+      pdf.save(fileName);
 
       setSuccessMessage(`PDF "${fileName}" berhasil didownload.`);
     } catch (error: any) {
+      console.error("Single PDF export error:", error);
       setErrorMessage(error.message || "Gagal mengunduh PDF. Coba lagi.");
     } finally {
-      // Restore original styles
-      if (previewRef.current) {
-        previewRef.current.style.border = origBorder;
-        previewRef.current.style.boxShadow = origBoxShadow;
-        previewRef.current.style.borderRadius = origBorderRadius;
-      }
-      if (headerEl) {
-        headerEl.style.border = origHeaderBorder;
-        headerEl.style.borderRadius = origHeaderBorderRadius;
-      }
-      if (lowerGridEl) {
-        lowerGridEl.style.pageBreakBefore = origLowerGridBreak;
-        lowerGridEl.style.breakBefore = origLowerGridBreakBefore;
-      }
       setIsGeneratingPdf(false);
+      setBatchRenderStudent(null);
     }
+  }
+
+  // Batch download for all students in the active class
+  async function handleBatchDownload(format: "MERGED_PDF" | "ZIP") {
+    if (!selectedClassName || !selectedAcademicYear || !selectedSemester) {
+      setErrorMessage("Pilih tahun ajaran, semester, dan kelas terlebih dahulu.");
+      return;
+    }
+
+    setIsBatchRunning(true);
+    abortBatchRef.current = false;
+    setBatchProgress({
+      current: 0,
+      total: 0,
+      percent: 5,
+      statusMessage: `Mengambil seluruh data nilai & raport siswa kelas ${selectedClassName}...`,
+    });
+
+    try {
+      const params = new URLSearchParams({
+        className: selectedClassName,
+        academicYear: selectedAcademicYear,
+        semester: selectedSemester,
+        reportVariant,
+      });
+      if (reportMajorCode) {
+        params.set("reportMajorCode", reportMajorCode);
+      }
+
+      const res = await fetch(`/api/report-cards/batch-preview?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal mengambil data kelas.");
+      }
+
+      const previews: PreviewResponse[] = data.previews || [];
+      if (previews.length === 0) {
+        throw new Error(`Tidak ada data siswa ditemukan di kelas ${selectedClassName}.`);
+      }
+
+      setBatchProgress({
+        current: 0,
+        total: previews.length,
+        percent: 10,
+        statusMessage: "Menyiapkan mesin dokumen...",
+      });
+
+      let zip: any = null;
+      let mergedPdf: any = null;
+      let PDFDocumentModule: any = null;
+
+      if (format === "ZIP") {
+        const JSZipModule = (await import("jszip")).default;
+        zip = new JSZipModule();
+      } else {
+        const pdfLib = await import("pdf-lib");
+        PDFDocumentModule = pdfLib.PDFDocument;
+        mergedPdf = await PDFDocumentModule.create();
+      }
+
+      const semLabel = selectedSemester.toUpperCase();
+      const cleanClassName = selectedClassName.replace(/\s+/g, "_");
+
+      for (let i = 0; i < previews.length; i++) {
+        if (abortBatchRef.current) {
+          throw new Error("Proses download dibatalkan oleh pengguna.");
+        }
+
+        const st = previews[i];
+        const studentCleanName = (st.student.name || "Siswa")
+          .replace(/[^a-zA-Z0-9 ]/g, "")
+          .trim()
+          .replace(/\s+/g, "_");
+
+        const studentFileName = `Raport_${reportVariant}_${semLabel}_${cleanClassName}_${String(
+          i + 1
+        ).padStart(2, "0")}_${studentCleanName}.pdf`;
+
+        setBatchProgress({
+          current: i + 1,
+          total: previews.length,
+          percent: 10 + Math.round((i / previews.length) * 80),
+          studentName: st.student.name,
+          statusMessage: `Membuat PDF siswa (${i + 1}/${previews.length}): ${st.student.name}...`,
+        });
+
+        setBatchRenderStudent(st);
+
+        // Wait for React to render the DOM
+        await new Promise((r) => setTimeout(r, 60));
+
+        const container = batchExportContainerRef.current;
+        if (!container) {
+          throw new Error("Kontainer render PDF tidak ditemukan.");
+        }
+
+        const studentPdf = await exportElementTo2PagePdf(container);
+        const arrayBuffer = studentPdf.output("arraybuffer");
+
+        if (format === "ZIP") {
+          zip.file(studentFileName, arrayBuffer);
+        } else {
+          const donorPdf = await PDFDocumentModule.load(arrayBuffer);
+          const copiedPages = await mergedPdf.copyPages(donorPdf, donorPdf.getPageIndices());
+          copiedPages.forEach((page: any) => mergedPdf.addPage(page));
+        }
+      }
+
+      if (abortBatchRef.current) {
+        throw new Error("Proses download dibatalkan.");
+      }
+
+      setBatchProgress({
+        current: previews.length,
+        total: previews.length,
+        percent: 95,
+        statusMessage:
+          format === "ZIP"
+            ? "Mengompresi file ke dalam format ZIP..."
+            : "Mengompilasi seluruh halaman PDF gabungan...",
+      });
+
+      if (format === "ZIP") {
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const zipFileName = `Raport_${reportVariant}_${semLabel}_${cleanClassName}_Semua_Siswa.zip`;
+        triggerBlobDownload(zipBlob, zipFileName);
+        setSuccessMessage(
+          `Arsip ZIP (${previews.length} file PDF raport siswa kelas ${selectedClassName}) berhasil diunduh!`
+        );
+      } else {
+        const mergedPdfBytes = await mergedPdf.save();
+        const mergedBlob = new Blob([mergedPdfBytes], { type: "application/pdf" });
+        const mergedFileName = `Raport_${reportVariant}_${semLabel}_${cleanClassName}_Semua_Siswa.pdf`;
+        triggerBlobDownload(mergedBlob, mergedFileName);
+        setSuccessMessage(
+          `PDF Gabungan (${previews.length} siswa, ${previews.length * 2} halaman) untuk kelas ${selectedClassName} berhasil diunduh!`
+        );
+      }
+
+      setBatchProgress({
+        current: previews.length,
+        total: previews.length,
+        percent: 100,
+        statusMessage: "Download selesai!",
+        isComplete: true,
+      });
+
+      setTimeout(() => {
+        setIsBatchModalOpen(false);
+        setIsBatchRunning(false);
+        setBatchRenderStudent(null);
+      }, 1500);
+    } catch (error: any) {
+      console.error("Batch download error:", error);
+      setErrorMessage(error.message || "Gagal melakukan download massal. Silakan coba lagi.");
+      setIsBatchRunning(false);
+      setBatchRenderStudent(null);
+    }
+  }
+
+  function handleCancelBatch() {
+    abortBatchRef.current = true;
+    setIsBatchRunning(false);
+    setIsBatchModalOpen(false);
+    setBatchRenderStudent(null);
   }
 
   return (
@@ -591,6 +716,7 @@ export default function ReportCardPage({
         </div>
       )}
 
+      {/* Filter Card */}
       <div className="rounded-2xl border bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-2">
           <GraduationCap size={18} className="text-primary-600" />
@@ -671,7 +797,8 @@ export default function ReportCardPage({
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        {/* Action Buttons */}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
             onClick={loadPreview}
             disabled={!selectedStudentId || isLoadingPreview}
@@ -680,14 +807,41 @@ export default function ReportCardPage({
             {isLoadingPreview ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
             Tampilkan Preview
           </button>
+
           <button
             onClick={handlePrint}
             disabled={!preview || isGeneratingPdf}
             className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isGeneratingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-            {isGeneratingPdf ? "Membuat PDF..." : "Download PDF"}
+            {isGeneratingPdf ? "Membuat PDF..." : "Download PDF (2 Lembar)"}
           </button>
+
+          {/* Download Semua Siswa 1 Kelas */}
+          <button
+            onClick={() => setIsBatchModalOpen(true)}
+            disabled={!selectedClassName || isBatchRunning}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-3 text-sm font-bold shadow-md transition disabled:cursor-not-allowed disabled:opacity-50"
+            title="Download seluruh siswa di kelas aktif sekaligus tanpa perlu satu persatu"
+          >
+            <FolderDown size={17} />
+            <span>Download Semua Siswa (1 Kelas)</span>
+            {students.length > 0 && (
+              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold backdrop-blur-xs">
+                {students.length} Siswa
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => window.print()}
+            disabled={!preview}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Printer size={16} />
+            Cetak Langsung (Print)
+          </button>
+
           <div className="text-sm text-gray-500">
             Periode aktif:{" "}
             <span className="font-medium text-gray-700">
@@ -697,6 +851,7 @@ export default function ReportCardPage({
         </div>
       </div>
 
+      {/* Main Preview or Empty Placeholder */}
       {!preview ? (
         <div className="rounded-2xl border border-dashed bg-white px-6 py-16 text-center shadow-sm">
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-blue-50">
@@ -707,6 +862,17 @@ export default function ReportCardPage({
             Pilih tahun ajaran, semester, kelas, dan siswa terlebih dahulu, lalu klik tombol
             `Tampilkan Preview`.
           </p>
+          {selectedClassName && students.length > 0 && (
+            <div className="mt-5">
+              <button
+                onClick={() => setIsBatchModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 text-xs font-bold shadow transition"
+              >
+                <FolderDown size={15} />
+                <span>Langsung Download Semua Raport Kelas {selectedClassName} ({students.length} Siswa)</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
@@ -724,6 +890,7 @@ export default function ReportCardPage({
             </div>
           </div>
 
+          {/* Data Pelengkap Card */}
           <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -754,8 +921,14 @@ export default function ReportCardPage({
                       : "bg-emerald-600 hover:bg-emerald-700"
                   }`}
                 >
-                  {isTogglingFinalization ? <Loader2 size={16} className="animate-spin" /> : <GraduationCap size={16} />}
-                  {preview.notes.finalization.isFinalized ? "Batalkan Finalisasi" : "Finalisasi Raport"}
+                  {isTogglingFinalization ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <GraduationCap size={16} />
+                  )}
+                  {preview.notes.finalization.isFinalized
+                    ? "Batalkan Finalisasi"
+                    : "Finalisasi Raport"}
                 </button>
                 <button
                   onClick={saveSupplement}
@@ -778,35 +951,47 @@ export default function ReportCardPage({
                   <p className="mb-2 text-sm font-semibold text-slate-700">Absensi</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Sakit</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Sakit
+                      </label>
                       <input
                         type="number"
                         min="0"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.sakit}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, sakit: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, sakit: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Izin</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Izin
+                      </label>
                       <input
                         type="number"
                         min="0"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.izin}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, izin: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, izin: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Alpha</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Alpha
+                      </label>
                       <input
                         type="number"
                         min="0"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.alpha}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, alpha: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, alpha: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
@@ -817,23 +1002,37 @@ export default function ReportCardPage({
                   <p className="mb-2 text-sm font-semibold text-slate-700">Pengembangan Diri</p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Pramuka</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Pramuka
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.developmentPramuka}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, developmentPramuka: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            developmentPramuka: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Baik / Cukup / Kurang"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Sholat Dhuha</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Sholat Dhuha
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.developmentSholatDhuha}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, developmentSholatDhuha: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            developmentSholatDhuha: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Baik / Cukup / Kurang"
                       />
@@ -845,34 +1044,55 @@ export default function ReportCardPage({
                   <p className="mb-2 text-sm font-semibold text-slate-700">Kepribadian</p>
                   <div className="grid gap-3 md:grid-cols-3">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Akhlak</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Akhlak
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.personalityAkhlak}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, personalityAkhlak: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            personalityAkhlak: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Baik / Cukup / Kurang"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kerajinan</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Kerajinan
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.personalityKerajinan}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, personalityKerajinan: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            personalityKerajinan: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Baik / Cukup / Kurang"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kerapian</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Kerapian
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.personalityKerapian}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, personalityKerapian: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            personalityKerapian: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Baik / Cukup / Kurang"
                       />
@@ -883,80 +1103,137 @@ export default function ReportCardPage({
 
               <div className="space-y-4">
                 <div>
-                  <p className="mb-2 text-sm font-semibold text-slate-700">Pengesahan Raport</p>
-                  <p className="mb-3 text-xs text-slate-500">
-                    `Kota` dan `Tanggal Raport` otomatis dipakai untuk semua siswa pada kelas yang sama.
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">Pengesahan Raport</p>
+                    <button
+                      type="button"
+                      onClick={saveSupplement}
+                      disabled={isSavingSupplement || preview.notes.finalization.isFinalized}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Simpan pengesahan ini agar langsung otomatis dipakai untuk seluruh siswa"
+                    >
+                      {isSavingSupplement ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <GraduationCap size={13} />
+                      )}
+                      <span>Terapkan Pengesahan ke Semua Siswa</span>
+                    </button>
+                  </div>
+                  <p className="mb-3 text-xs font-medium text-emerald-700">
+                    Cukup sekali submit: Data Pengesahan Raport (Kota, Tanggal, Wali Kelas, Kepala
+                    Sekolah) otomatis dipakai oleh tampilan raport semua siswa.
                   </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kota</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Kota
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.reportCity}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, reportCity: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, reportCity: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="Pacet"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tanggal Raport</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Tanggal Raport
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.reportDate}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, reportDate: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, reportDate: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                         placeholder="20 Juni 2026"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Wali Kelas</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Nama Wali Kelas
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.homeroomSignatureName}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, homeroomSignatureName: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            homeroomSignatureName: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Jabatan Wali</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Jabatan Wali
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.homeroomSignatureTitle}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, homeroomSignatureTitle: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            homeroomSignatureTitle: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Kepala Sekolah</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Nama Kepala Sekolah
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.principalSignatureName}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, principalSignatureName: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            principalSignatureName: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Jabatan Kepala Sekolah</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Jabatan Kepala Sekolah
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.principalSignatureTitle}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, principalSignatureTitle: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({
+                            ...prev,
+                            principalSignatureTitle: e.target.value,
+                          }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">NIP Kepala Sekolah</label>
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        NIP Kepala Sekolah
+                      </label>
                       <input
                         type="text"
                         disabled={preview.notes.finalization.isFinalized}
                         value={supplementForm.principalNip}
-                        onChange={(e) => setSupplementForm((prev) => ({ ...prev, principalNip: e.target.value }))}
+                        onChange={(e) =>
+                          setSupplementForm((prev) => ({ ...prev, principalNip: e.target.value }))
+                        }
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                       />
                     </div>
@@ -964,11 +1241,15 @@ export default function ReportCardPage({
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Catatan Wali Kelas</label>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Catatan Wali Kelas
+                  </label>
                   <textarea
                     value={supplementForm.homeroomNote}
                     disabled={preview.notes.finalization.isFinalized}
-                    onChange={(e) => setSupplementForm((prev) => ({ ...prev, homeroomNote: e.target.value }))}
+                    onChange={(e) =>
+                      setSupplementForm((prev) => ({ ...prev, homeroomNote: e.target.value }))
+                    }
                     rows={7}
                     className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm leading-6 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-100"
                     placeholder="Tuliskan catatan wali kelas untuk siswa ini..."
@@ -978,298 +1259,208 @@ export default function ReportCardPage({
             </div>
           </div>
 
-          <div
+          {/* Printable Report Card Sheet */}
+          <PrintableReportSheet
             ref={previewRef}
-            className="report-sheet mx-auto w-full max-w-[794px] min-h-[1123px] rounded-2xl border border-gray-200 bg-white p-5"
-          >
-            <div className="report-header overflow-hidden rounded-3xl border border-slate-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={reportHeaderImage.src}
-                alt="Kop SMKS Pacet"
-                className="w-full h-auto block"
-                style={{ display: "block", width: "100%", height: "auto" }}
-              />
-              <div className="report-header-bottom bg-white text-center">
-                <p className="text-xl font-black uppercase tracking-wide text-slate-900">
-                  {reportDocumentTitle || preview.schoolInfo.title}
-                </p>
-                <p className="mt-1 text-base font-bold uppercase tracking-wide text-slate-700">
-                  {preview.schoolInfo.academicYearTitle}
-                </p>
-              </div>
-            </div>
+            preview={preview}
+            reportVariant={reportVariant}
+            reportDocumentTitle={reportDocumentTitle}
+            competenceLabel={competenceLabel}
+          />
+        </div>
+      )}
 
-            <div className="report-student-meta mt-4">
-              <table className="w-full border-collapse">
-                <tbody>
-                  <tr>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Nama</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs font-bold text-gray-900">{preview.student.name}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Bidang Keahlian</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.classInfo.bidangKeahlian}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Induk / NIS</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.student.nis || "-"}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Program Keahlian</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.classInfo.programKeahlian}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>NISN</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.student.nisn}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Konsentrasi Keahlian</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.classInfo.konsentrasiKeahlian}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Kelas</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">{preview.student.className}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-600"><div className="flex justify-between"><span>Fase</span><span>:</span></div></td>
-                    <td className="px-3 py-2 text-xs text-gray-900">
-                      {preview.student.phase}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+      {/* Hidden Off-Screen Container for Batch PDF Generation */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "794px",
+          zIndex: 40,
+          pointerEvents: "none",
+          visibility: isBatchRunning || isGeneratingPdf ? "visible" : "hidden",
+        }}
+      >
+        {batchRenderStudent && (
+          <div ref={batchExportContainerRef}>
+            <PrintableReportSheet
+              preview={batchRenderStudent}
+              reportVariant={reportVariant}
+              reportDocumentTitle={reportDocumentTitle}
+              competenceLabel={competenceLabel}
+              forPdfExport={true}
+            />
+          </div>
+        )}
+      </div>
 
-            <div className="mt-4 space-y-4">
-              {preview.groupedRows.length === 0 ? (
-                <div className="rounded-xl border border-dashed px-4 py-12 text-center text-sm text-gray-500">
-                  Belum ada data nilai yang bisa ditampilkan untuk periode ini.
+      {/* Batch Download Modal */}
+      {isBatchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                  <FolderDown size={24} />
                 </div>
-              ) : (
-                preview.groupedRows.map((group, groupIndex) => (
-                  <div key={group.code} className="report-group overflow-hidden rounded-2xl border border-slate-300">
-                    <div className="report-group-title bg-slate-200 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-800">
-                      {group.code}. {group.name}
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-full border-collapse">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="w-10 border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">No</th>
-                            <th className="w-[22%] border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">Mata Pelajaran</th>
-                            {reportVariant === "SAS" ? (
-                              <>
-                                <th className="w-20 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Nilai Akhir</th>
-                                <th className="border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">{competenceLabel}</th>
-                              </>
-                            ) : (
-                              <>
-                                <th className="w-12 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">AH</th>
-                                <th className="w-12 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Tugas</th>
-                                <th className="w-12 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">STS</th>
-                                <th className="w-16 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Nilai Akhir</th>
-                                <th className="border px-2 py-2 text-left text-[11px] font-semibold uppercase text-slate-600">{competenceLabel}</th>
-                              </>
-                            )}
-                            <th className="w-20 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Rata-rata</th>
-                            <th className="w-24 border px-2 py-2 text-center text-[11px] font-semibold uppercase text-slate-600">Keterangan</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {group.items.map((item) => (
-                            <tr key={`${group.code}-${item.subjectName}`} className="align-top">
-                              <td className="border px-2 py-2 text-[11px] text-slate-700">{item.no}</td>
-                              <td className="border px-2 py-2 text-[11px] font-medium text-slate-900">{item.subjectName}</td>
-                              {reportVariant === "SAS" ? (
-                                <>
-                                  <td className="border px-2 py-2 text-center text-[11px] font-semibold text-slate-900">{formatRounded(item.roundedScore)}</td>
-                                  <td className="border px-2 py-2 text-[11px] leading-5 text-slate-700">{item.competenceNote}</td>
-                                </>
-                              ) : (
-                                <>
-                                  <td className="border px-2 py-2 text-center text-[11px] text-slate-700">{formatNumber(item.uhAverage)}</td>
-                                  <td className="border px-2 py-2 text-center text-[11px] text-slate-700">{formatNumber(item.tugasAverage)}</td>
-                                  <td className="border px-2 py-2 text-center text-[11px] text-slate-700">{formatNumber(item.stsScore)}</td>
-                                  <td className="border px-2 py-2 text-center text-[11px] font-semibold text-slate-900">{formatRounded(item.roundedScore)}</td>
-                                  <td className="border px-2 py-2 text-[11px] leading-5 text-slate-700">{item.competenceNote}</td>
-                                </>
-                              )}
-                              <td className="border px-2 py-2 text-center text-[11px] text-slate-700"></td>
-                              <td className="border px-2 py-2 text-center text-[11px] text-slate-700"></td>
-                            </tr>
-                          ))}
-                          {groupIndex === preview.groupedRows.length - 1 && (
-                            <>
-                              <tr className="bg-slate-50">
-                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                <td className="border px-2 py-2 text-[11px] font-semibold uppercase text-slate-800">
-                                  Jumlah Nilai
-                                </td>
-                                {reportVariant === "SAS" ? (
-                                  <>
-                                    <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                      {formatRounded(preview.summary.totalScore)}
-                                    </td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                  </>
-                                ) : (
-                                  <>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                      {formatRounded(preview.summary.totalScore)}
-                                    </td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                  </>
-                                )}
-                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                              </tr>
-                              <tr className="bg-slate-50">
-                                <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                <td className="border px-2 py-2 text-[11px] font-semibold uppercase text-slate-800">
-                                  Rata-rata Nilai
-                                </td>
-                                {reportVariant === "SAS" ? (
-                                  <>
-                                    <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                      {preview.summary.averageScore === null ? "-" : preview.summary.averageScore.toFixed(2)}
-                                    </td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                  </>
-                                ) : (
-                                  <>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                    <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                      {preview.summary.averageScore === null ? "-" : preview.summary.averageScore.toFixed(2)}
-                                    </td>
-                                    <td className="border px-2 py-2 text-[11px] text-slate-700"></td>
-                                  </>
-                                )}
-                                <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                  {preview.summary.averageScore === null ? "-" : preview.summary.averageScore.toFixed(2)}
-                                </td>
-                                <td className="border px-2 py-2 text-center text-[11px] font-bold text-slate-900">
-                                  {preview.summary.averageScore === null ? "-" : (preview.summary.averageScore < 78 ? "Tidak Naik Kelas" : "Naik Kelas")}
-                                </td>
-                              </tr>
-                            </>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Download Raport 1 Kelas Sekaligus
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Kelas{" "}
+                    <span className="font-bold text-gray-700 dark:text-gray-200">
+                      {selectedClassName}
+                    </span>{" "}
+                    • {selectedAcademicYear} • {selectedSemester} ({students.length} Siswa)
+                  </p>
+                </div>
+              </div>
+              {!isBatchRunning && (
+                <button
+                  onClick={() => setIsBatchModalOpen(false)}
+                  className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  <X size={18} />
+                </button>
               )}
             </div>
 
-            <div className="report-lower-grid mt-4 grid gap-4 lg:grid-cols-2">
-              <div className="report-panel overflow-hidden rounded-2xl border border-slate-300">
-                <div className="report-panel-header bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-800">
-                  Pengembangan Diri dan Kepribadian
-                </div>
-                <div className="report-panel-body p-3 text-xs text-slate-700">
-                  <div className="mb-3">
-                    <p className="report-section-title mb-2 font-semibold text-slate-800">Pengembangan Diri</p>
-                    <div className="report-stack space-y-2">
-                      {preview.notes.development.map((item) => (
-                        <div key={item.activity} className="report-row-box flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-                          <span className="report-row-box-label">{item.activity}</span>
-                          <span className="report-row-box-value font-semibold">{item.value}</span>
-                        </div>
-                      ))}
-                    </div>
+            {isBatchRunning ? (
+              /* Running State with Progress Bar */
+              <div className="space-y-4 py-2">
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-4">
+                  <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 dark:text-emerald-300 mb-2">
+                    <span className="flex items-center gap-2">
+                      <Loader2 size={14} className="animate-spin text-emerald-600" />
+                      {batchProgress.statusMessage}
+                    </span>
+                    <span>{batchProgress.percent}%</span>
                   </div>
-                  <div>
-                    <p className="report-section-title mb-2 font-semibold text-slate-800">Kepribadian</p>
-                    <div className="report-stack space-y-2">
-                      {preview.notes.personality.map((item) => (
-                        <div key={item.aspect} className="report-row-box flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-                          <span className="report-row-box-label">{item.aspect}</span>
-                          <span className="report-row-box-value font-semibold">{item.value}</span>
-                        </div>
-                      ))}
-                    </div>
+                  <div className="w-full bg-emerald-200/60 dark:bg-emerald-900 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-emerald-600 h-3 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${batchProgress.percent}%` }}
+                    />
                   </div>
+                  {batchProgress.total > 0 && (
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-2">
+                      Progres: <span className="font-bold">{batchProgress.current}</span> dari{" "}
+                      <span className="font-bold">{batchProgress.total}</span> siswa
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              <div className="report-panel overflow-hidden rounded-2xl border border-slate-300">
-                <div className="report-panel-header bg-slate-100 px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-800">
-                  Absensi dan Catatan
-                </div>
-                <div className="report-panel-body space-y-3 p-3 text-xs text-slate-700">
-                  <div className="report-attendance-grid grid grid-cols-3 gap-3">
-                    <div className="report-attendance-card rounded-xl border bg-slate-50 p-2.5 text-center">
-                      <p className="report-attendance-card-label text-xs font-semibold uppercase tracking-wide text-slate-500">Sakit</p>
-                      <p className="report-attendance-card-value mt-1 text-lg font-bold text-slate-900">{preview.notes.attendance.sakit}</p>
-                    </div>
-                    <div className="report-attendance-card rounded-xl border bg-slate-50 p-2.5 text-center">
-                      <p className="report-attendance-card-label text-xs font-semibold uppercase tracking-wide text-slate-500">Izin</p>
-                      <p className="report-attendance-card-value mt-1 text-lg font-bold text-slate-900">{preview.notes.attendance.izin}</p>
-                    </div>
-                    <div className="report-attendance-card rounded-xl border bg-slate-50 p-2.5 text-center">
-                      <p className="report-attendance-card-label text-xs font-semibold uppercase tracking-wide text-slate-500">Alpha</p>
-                      <p className="report-attendance-card-value mt-1 text-lg font-bold text-slate-900">{preview.notes.attendance.alpha}</p>
-                    </div>
-                  </div>
-
-                  <div className="report-note-box rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-900">
-                    {preview.notes.homeroomNote}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-signatures mt-6">
-              <div
-                className="report-signatures-top"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "220px 1fr 320px",
-                  alignItems: "start",
-                  columnGap: "24px",
-                  width: "100%",
-                }}
-              >
-                <div className="report-signature-block report-signature-block-left w-[220px] text-left">
-                  <p className="report-signature-role-left text-sm leading-6 text-slate-900">
-                    Mengetahui,
-                    <br />
-                    Orang Tua / Wali
-                  </p>
-                  <div className="report-signature-space h-16" />
-                  <div className="border-b border-slate-900 w-[160px]" />
-                </div>
-                <div
-                  className="report-signature-block report-signature-block-right col-start-3 flex w-[320px] flex-col items-center text-center"
-                >
-                  <p className="report-signature-city text-sm text-slate-900">
-                    {preview.notes.location.city},{preview.notes.location.date ? ` ${preview.notes.location.date}` : ""}
-                  </p>
-                  <p className="report-signature-role text-sm text-slate-900">
-                    {preview.notes.signatures.homeroom.title}
-                  </p>
-                  <div className="report-signature-space h-16" />
-                  <div className="report-signature-name text-sm font-bold underline text-slate-900">
-                    {preview.notes.signatures.homeroom.name || "-"}
-                  </div>
-                </div>
-              </div>
-
-              <div className="report-signature-principal mt-8 text-center">
-                <p className="report-signature-role text-sm leading-6 text-slate-900">
-                  Mengetahui,
-                  <br />
-                  Kepala SMKS Pacet
+                <p className="text-center text-xs text-gray-500 dark:text-gray-400 italic">
+                  Mohon jangan menutup tab browser sampai proses download selesai.
                 </p>
-                <div className="report-signature-space h-16" />
-                <div className="report-signature-name text-sm font-bold underline text-slate-900">
-                  {preview.notes.signatures.principal.name || "-"}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={handleCancelBatch}
+                    className="px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition border border-rose-200"
+                  >
+                    Batalkan Proses
+                  </button>
                 </div>
-                {preview.notes.signatures.principal.nip ? (
-                  <p className="report-signature-nip text-xs text-slate-600">
-                    NIP. {preview.notes.signatures.principal.nip}
-                  </p>
-                ) : null}
               </div>
-            </div>
+            ) : (
+              /* Options Selection State */
+              <div className="space-y-4 py-1">
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Pilih format unduhan untuk seluruh siswa di kelas{" "}
+                  <span className="font-bold text-gray-800 dark:text-white">
+                    {selectedClassName}
+                  </span>
+                  :
+                </p>
+
+                {/* Option 1: Merged Single PDF */}
+                <div
+                  onClick={() => handleBatchDownload("MERGED_PDF")}
+                  className="group cursor-pointer rounded-2xl border-2 border-emerald-500/40 hover:border-emerald-600 bg-emerald-50/40 hover:bg-emerald-50/80 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 p-4 transition shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-emerald-600 text-white shadow-sm shrink-0">
+                        <FileText size={20} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                            1 File PDF Gabungan
+                          </h4>
+                          <span className="rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-bold">
+                            Rekomendasi Cetak Massal
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Seluruh raport siswa ({students.length} siswa) disatukan dalam 1 dokumen PDF
+                          berurutan (2 halaman per siswa). Cukup klik cetak 1x ke mesin printer atau
+                          fotokopi untuk mencetak seluruh kelas.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-3 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-sm"
+                  >
+                    Download 1 File PDF Gabungan ({students.length} Siswa)
+                  </button>
+                </div>
+
+                {/* Option 2: ZIP File */}
+                <div
+                  onClick={() => handleBatchDownload("ZIP")}
+                  className="group cursor-pointer rounded-2xl border border-gray-200 hover:border-indigo-400 bg-gray-50/60 hover:bg-indigo-50/40 dark:bg-gray-900/40 dark:hover:bg-indigo-950/20 p-4 transition shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-sm shrink-0">
+                        <FileArchive size={20} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                            Paket Arsip File ZIP (PDF Terpisah Tiap Siswa)
+                          </h4>
+                          <span className="rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 px-2 py-0.5 text-[10px] font-bold">
+                            Rekomendasi Arsip / WA
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Berisi file PDF terpisah untuk tiap siswa (contoh:{" "}
+                          <code className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono">
+                            Raport_01_Nama.pdf
+                          </code>
+                          ). Praktis untuk dikirimkan secara mandiri ke siswa atau wali murid via
+                          WhatsApp.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-3 w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition shadow-sm"
+                  >
+                    Download Paket File ZIP ({students.length} Siswa)
+                  </button>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 rounded-xl transition"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

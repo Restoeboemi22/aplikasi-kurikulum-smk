@@ -192,7 +192,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const normalizedHomeroomName = String(homeroomSignatureName || "").trim();
+    const normalizedHomeroomTitle = String(homeroomSignatureTitle || "").trim() || "Wali Kelas";
+    const normalizedPrincipalName =
+      String(principalSignatureName || "").trim() || "Moh. Junaedi Hartanto, S.Pd";
+    const normalizedPrincipalTitle =
+      String(principalSignatureTitle || "").trim() || "Kepala Sekolah";
+    const normalizedPrincipalNip = String(principalNip || "").trim();
+
     if (student.className) {
+      // 1. Terapkan data pengesahan (Kota, Tanggal, Wali Kelas, Kepala Sekolah) ke seluruh siswa yang sudah punya supplement
       await prisma.reportCardSupplement.updateMany({
         where: {
           className: student.className,
@@ -205,9 +214,54 @@ export async function POST(request: NextRequest) {
         data: {
           reportCity: normalizedReportCity,
           reportDate: normalizedReportDate,
+          homeroomSignatureName: normalizedHomeroomName,
+          homeroomSignatureTitle: normalizedHomeroomTitle,
+          principalSignatureName: normalizedPrincipalName,
+          principalSignatureTitle: normalizedPrincipalTitle,
+          principalNip: normalizedPrincipalNip,
           updatedByUserId: session.uid,
         },
       });
+
+      // 2. Buatkan supplement otomatis untuk siswa lain di kelas yang sama yang belum punya baris supplement
+      const classStudents = await prisma.student.findMany({
+        where: {
+          className: student.className,
+          id: { not: studentId },
+        },
+        select: { id: true },
+      });
+
+      const existingClassSupplements = await prisma.reportCardSupplement.findMany({
+        where: {
+          className: student.className,
+          academicYear,
+          semester,
+        },
+        select: { studentId: true },
+      });
+      const existingStudentIdSet = new Set(existingClassSupplements.map((s) => s.studentId));
+      const uninitializedStudents = classStudents.filter((s) => !existingStudentIdSet.has(s.id));
+
+      if (uninitializedStudents.length > 0) {
+        await prisma.reportCardSupplement.createMany({
+          data: uninitializedStudents.map((s) => ({
+            studentId: s.id,
+            academicYear,
+            semester,
+            className: student.className,
+            reportCity: normalizedReportCity,
+            reportDate: normalizedReportDate,
+            homeroomSignatureName: normalizedHomeroomName,
+            homeroomSignatureTitle: normalizedHomeroomTitle,
+            principalSignatureName: normalizedPrincipalName,
+            principalSignatureTitle: normalizedPrincipalTitle,
+            principalNip: normalizedPrincipalNip,
+            updatedByUserId: session.uid,
+          })),
+          skipDuplicates: true,
+        });
+      }
     }
 
     return NextResponse.json(supplement);

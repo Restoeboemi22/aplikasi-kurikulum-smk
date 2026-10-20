@@ -35,6 +35,8 @@ import {
   Loader2,
   Database,
   Target,
+  BarChart3,
+  ClipboardCheck,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { canAccessMenu, MenuAccessContext } from "@/lib/permissions";
@@ -75,6 +77,8 @@ const ManageAccountsPage = dynamic(() => import("./kelola-akun/page"), { loading
 const MasterNilaiPage = dynamic(() => import("./master-nilai/master-nilai-page"), { loading: () => <PageLoader /> });
 const TeachingObjectivesPage = dynamic(() => import("./tujuan-pembelajaran/page"), { loading: () => <PageLoader /> });
 const LaporanKetidakhadiranPage = dynamic(() => import("./laporan-ketidakhadiran/page"), { loading: () => <PageLoader /> });
+const MonitoringGuruPage = dynamic(() => import("./monitoring-guru/page"), { loading: () => <PageLoader /> });
+const PelengkapRaportPage = dynamic(() => import("./pelengkap-raport/page"), { loading: () => <PageLoader /> });
 import schoolLogo from "../logo SMKS PACET.png";
 
 type NavEntry = {
@@ -232,7 +236,9 @@ export default function Home() {
       label: "Penilaian",
       icon: GraduationCap,
       children: [
+        { id: "monitoring-guru", label: "Monitoring Progres Guru", icon: BarChart3 },
         { id: "master-nilai", label: "Master Nilai", icon: Database },
+        { id: "pelengkap-raport", label: "Catatan & Absensi Wali Kelas", icon: ClipboardCheck },
         { id: "tujuan-pembelajaran", label: "TP (Tujuan Pembelajaran)", icon: Target },
         { id: "penilaian-uh", label: "AH (Asesmen Harian)", icon: ClipboardList },
         { id: "penilaian-tugas", label: "Tugas", icon: FileEdit },
@@ -348,6 +354,10 @@ export default function Home() {
         );
       case "tujuan-pembelajaran":
         return <TeachingObjectivesPage />;
+      case "monitoring-guru":
+        return <MonitoringGuruPage />;
+      case "pelengkap-raport":
+        return <PelengkapRaportPage />;
       default:
         return <Dashboard />;
     }

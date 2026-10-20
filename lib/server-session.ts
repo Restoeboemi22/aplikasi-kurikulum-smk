@@ -110,12 +110,24 @@ export async function buildSessionProfile(session: ServerSessionUser): Promise<S
     };
   }
 
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId: session.uid },
+  const teacher = await prisma.teacher.findFirst({
+    where: {
+      OR: [
+        { userId: session.uid },
+        session.nip ? { kodeGuru: session.nip } : null,
+        session.nip ? { user: { nip: session.nip } } : null,
+      ].filter(Boolean) as any[],
+    },
     select: {
       id: true,
+      user: {
+        select: {
+          name: true,
+        },
+      },
       homeroomClasses: {
         select: {
+          id: true,
           className: true,
         },
         orderBy: {
@@ -125,7 +137,41 @@ export async function buildSessionProfile(session: ServerSessionUser): Promise<S
     },
   });
 
-  const homeroomClassNames = teacher?.homeroomClasses.map((item) => item.className) ?? [];
+  const homeroomClassSet = new Set<string>(
+    teacher?.homeroomClasses.map((item) => item.className) ?? []
+  );
+
+  // Fallback tangguh: cari kelas berdasarkan nama wali kelas jika homeroomTeacherId belum tersambung
+  const teacherName = teacher?.user?.name || session.name;
+  if (teacherName) {
+    const matchingClasses = await prisma.classMajor.findMany({
+      where: {
+        OR: [
+          teacher?.id ? { homeroomTeacherId: teacher.id } : null,
+          { homeroomTeacher: { equals: teacherName, mode: "insensitive" } },
+          { homeroomTeacher: { contains: teacherName, mode: "insensitive" } },
+        ].filter(Boolean) as any[],
+      },
+      select: {
+        id: true,
+        className: true,
+        homeroomTeacherId: true,
+      },
+    });
+
+    for (const c of matchingClasses) {
+      homeroomClassSet.add(c.className);
+      // Auto-heal jika foreign key belum terisi
+      if (teacher?.id && !c.homeroomTeacherId) {
+        await prisma.classMajor.update({
+          where: { id: c.id },
+          data: { homeroomTeacherId: teacher.id },
+        }).catch(() => null);
+      }
+    }
+  }
+
+  const homeroomClassNames = Array.from(homeroomClassSet).sort();
 
   return {
     ...session,

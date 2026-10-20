@@ -5,6 +5,7 @@ import { getSessionSecret, SESSION_COOKIE_NAME } from "@/lib/session-config";
 type MiddlewareSession = {
   role: "ADMIN" | "TEACHER";
   isHomeroomTeacher?: boolean;
+  homeroomClassNames?: string[];
   exp: number;
 };
 
@@ -85,6 +86,7 @@ export async function middleware(request: NextRequest) {
   const hasAccess = canAccessPath(normalizedPath, {
     role: session.role,
     isHomeroomTeacher: Boolean(session.isHomeroomTeacher),
+    homeroomClassNames: session.homeroomClassNames,
   });
 
   if (!hasAccess) {

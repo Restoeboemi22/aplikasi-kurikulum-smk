@@ -126,10 +126,26 @@ export async function GET(request: NextRequest) {
             className: student.className,
             academicYear,
             semester,
+            OR: [
+              { reportDate: { not: "" } },
+              { homeroomSignatureName: { not: "" } },
+            ],
           },
           orderBy: [{ updatedAt: "desc" }],
         })
       : null;
+
+    const schoolSupplement = await prisma.reportCardSupplement.findFirst({
+      where: {
+        academicYear,
+        semester,
+        OR: [
+          { principalSignatureName: { not: "" } },
+          { reportDate: { not: "" } },
+        ],
+      },
+      orderBy: [{ updatedAt: "desc" }],
+    });
 
     // 1. Fetch subjects directly from database Subject table
     const dbSubjects = await prisma.subject.findMany({
@@ -365,22 +381,46 @@ export async function GET(request: NextRequest) {
             ? "Belum ada data nilai untuk semester ini."
             : "Lengkapi absensi, kepribadian, pengembangan diri, dan catatan wali untuk menyempurnakan raport."),
         location: {
-          city: supplement?.reportCity || classLocationSupplement?.reportCity || "Pacet",
-          date: supplement?.reportDate || classLocationSupplement?.reportDate || "",
+          city:
+            supplement?.reportCity ||
+            classLocationSupplement?.reportCity ||
+            schoolSupplement?.reportCity ||
+            "Pacet",
+          date:
+            supplement?.reportDate ||
+            classLocationSupplement?.reportDate ||
+            schoolSupplement?.reportDate ||
+            "",
         },
         signatures: {
           homeroom: {
             name:
               supplement?.homeroomSignatureName ||
+              classLocationSupplement?.homeroomSignatureName ||
               classMajor?.homeroomTeacherProfile?.user?.name ||
               classMajor?.homeroomTeacher ||
               "",
-            title: supplement?.homeroomSignatureTitle || "Wali Kelas",
+            title:
+              supplement?.homeroomSignatureTitle ||
+              classLocationSupplement?.homeroomSignatureTitle ||
+              "Wali Kelas",
           },
           principal: {
-            name: supplement?.principalSignatureName || "Kepala SMKS PACET",
-            title: supplement?.principalSignatureTitle || "Kepala Sekolah",
-            nip: supplement?.principalNip ?? "",
+            name:
+              supplement?.principalSignatureName ||
+              classLocationSupplement?.principalSignatureName ||
+              schoolSupplement?.principalSignatureName ||
+              "Moh. Junaedi Hartanto, S.Pd",
+            title:
+              supplement?.principalSignatureTitle ||
+              classLocationSupplement?.principalSignatureTitle ||
+              schoolSupplement?.principalSignatureTitle ||
+              "Kepala Sekolah",
+            nip:
+              supplement?.principalNip ??
+              classLocationSupplement?.principalNip ??
+              schoolSupplement?.principalNip ??
+              "",
           },
         },
         finalization: {

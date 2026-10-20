@@ -79,8 +79,14 @@ export async function resolveReportViewerAccess(session: ServerSessionUser) {
     },
     select: {
       id: true,
+      user: {
+        select: {
+          name: true,
+        },
+      },
       homeroomClasses: {
         select: {
+          id: true,
           className: true,
         },
         orderBy: {
@@ -94,7 +100,39 @@ export async function resolveReportViewerAccess(session: ServerSessionUser) {
     return null;
   }
 
-  const allowedClassNames = teacher.homeroomClasses.map((item) => item.className);
+  const allowedClassSet = new Set<string>(
+    teacher.homeroomClasses.map((item) => item.className)
+  );
+
+  const teacherName = teacher.user?.name || session.name;
+  if (teacherName) {
+    const matchingClasses = await prisma.classMajor.findMany({
+      where: {
+        OR: [
+          { homeroomTeacherId: teacher.id },
+          { homeroomTeacher: { equals: teacherName, mode: "insensitive" } },
+          { homeroomTeacher: { contains: teacherName, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        className: true,
+        homeroomTeacherId: true,
+      },
+    });
+
+    for (const c of matchingClasses) {
+      allowedClassSet.add(c.className);
+      if (!c.homeroomTeacherId) {
+        await prisma.classMajor.update({
+          where: { id: c.id },
+          data: { homeroomTeacherId: teacher.id },
+        }).catch(() => null);
+      }
+    }
+  }
+
+  const allowedClassNames = Array.from(allowedClassSet).sort();
 
   return {
     role: "TEACHER" as const,

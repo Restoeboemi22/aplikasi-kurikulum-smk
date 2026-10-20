@@ -114,6 +114,22 @@ export default function MasterNilaiPage({
   }, [allowedClassNameSet, classMajors]);
   const selectedClass = visibleClassMajors.find((cls) => cls.id === selectedClassId);
 
+  const getKeteranganKenaikan = (student: MasterNilaiRow) => {
+    if (selectedSemester === "Ganjil") return "–";
+    const rataRata = calculateOverallAverage(student);
+    if (rataRata === null) return "–";
+    const rawGrade = (selectedClass?.grade || "").trim().toUpperCase();
+    const grade = rawGrade === "10" ? "X" : rawGrade === "11" ? "XI" : rawGrade === "12" ? "XII" : rawGrade;
+
+    if (rataRata < 78) {
+      return grade === "XII" ? "Tidak Lulus" : grade ? `Tinggal di Kelas ${grade}` : "Tidak Naik Kelas";
+    }
+    if (grade === "X") return "Naik ke Kelas XI";
+    if (grade === "XI") return "Naik ke Kelas XII";
+    if (grade === "XII") return "Lulus";
+    return "Naik Kelas";
+  };
+
   useEffect(() => {
     fetchClassMajors();
   }, []);
@@ -479,7 +495,7 @@ export default function MasterNilaiPage({
           0
         );
         const rataRata = calculateOverallAverage(student);
-        const keterangan = rataRata === null ? "–" : rataRata < 78 ? "Tidak Naik Kelas" : "Naik Kelas";
+        const keterangan = getKeteranganKenaikan(student);
         const rowIndex = idx + 4;
         const rowValues: Array<string | number> = [
           idx + 1,
@@ -809,7 +825,7 @@ export default function MasterNilaiPage({
                       {calculateOverallAverage(student) === null ? "–" : calculateOverallAverage(student)}
                     </td>
                     <td className="border border-gray-300 text-center font-semibold py-2">
-                      {calculateOverallAverage(student) === null ? "–" : (calculateOverallAverage(student)! < 78 ? "Tidak Naik Kelas" : "Naik Kelas")}
+                      {getKeteranganKenaikan(student)}
                     </td>
                   </tr>
                 );

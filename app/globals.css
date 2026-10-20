@@ -40,3 +40,59 @@ body {
   color: #be185d;
 }
 
+/* ===== Print Styling (Cetak Raport & Dokumen Resmi) ===== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 6mm 8mm 6mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Sembunyikan semua UI web saat print: sidebar, header, form, tombol */
+  aside,
+  nav,
+  header,
+  .no-print,
+  button,
+  input,
+  select,
+  textarea,
+  .report-controls {
+    display: none !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .report-sheet,
+  .report-sheet * {
+    visibility: visible;
+  }
+
+  .report-sheet {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  .report-page-2-break {
+    page-break-before: always !important;
+    break-before: page !important;
+  }
+}
+
