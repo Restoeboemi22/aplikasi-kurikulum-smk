@@ -137,7 +137,181 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
         : `Laporan Hasil Belajar Siswa Sumatif Tengah Semester ${preview.filter.semester.toUpperCase()}`);
 
     const kelompokA = preview.groupedRows.find((g) => g.code === "A");
-    const kelompokBList = preview.groupedRows.filter((g) => g.code !== "A");
+    const kelompokBGroup =
+      preview.groupedRows.find((g) => g.code === "B") ||
+      preview.groupedRows.find((g) => g.code !== "A");
+    const otherBGroups = preview.groupedRows.filter(
+      (g) => g.code !== "A" && g !== kelompokBGroup
+    );
+
+    const aCount = kelompokA?.items.length || 0;
+    const bTotal = kelompokBGroup?.items.length || 0;
+
+    // Tentukan jumlah mata pelajaran Kelompok B yang dialokasikan ke Halaman 1
+    // agar tabel terbagi seimbang dan tanda tangan di Halaman 2 muat lapang
+    let bPage1Count = 0;
+    if (bTotal >= 6 && aCount <= 4) {
+      bPage1Count = 3;
+    } else if (bTotal >= 4) {
+      bPage1Count = 2;
+    } else if (bTotal === 3) {
+      bPage1Count = 1;
+    } else {
+      bPage1Count = 0;
+    }
+
+    const bPage1Items = kelompokBGroup ? kelompokBGroup.items.slice(0, bPage1Count) : [];
+    const bPage2Items = kelompokBGroup ? kelompokBGroup.items.slice(bPage1Count) : [];
+
+    const renderSubjectTable = (
+      items: NonNullable<typeof kelompokA>["items"],
+      options?: { showSummary?: boolean }
+    ) => (
+      <table className="w-full min-w-full border-collapse">
+        <thead className="bg-slate-50">
+          <tr>
+            <th className="w-8 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+              No
+            </th>
+            <th className="w-[28%] border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
+              Mata Pelajaran
+            </th>
+            {reportVariant === "SAS" ? (
+              <>
+                <th className="w-16 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+                  Nilai Akhir
+                </th>
+                <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
+                  {competenceLabel}
+                </th>
+              </>
+            ) : (
+              <>
+                <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+                  AH
+                </th>
+                <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+                  Tugas
+                </th>
+                <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+                  STS
+                </th>
+                <th className="w-14 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
+                  Nilai Akhir
+                </th>
+                <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
+                  {competenceLabel}
+                </th>
+              </>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={`${item.groupCode}-${item.subjectName}`} className="align-top">
+              <td className="border px-1.5 py-1 text-center text-[12px] text-slate-700">
+                {item.no}
+              </td>
+              <td className="border px-2 py-1 text-[12px] font-medium text-slate-900">
+                {item.subjectName}
+              </td>
+              {reportVariant === "SAS" ? (
+                <>
+                  <td className="border px-1.5 py-1 text-center text-[12px] font-semibold text-slate-900">
+                    {formatRounded(item.roundedScore)}
+                  </td>
+                  <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
+                    {item.competenceNote}
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
+                    {formatNumber(item.uhAverage)}
+                  </td>
+                  <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
+                    {formatNumber(item.tugasAverage)}
+                  </td>
+                  <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
+                    {formatNumber(item.stsScore)}
+                  </td>
+                  <td className="border px-1 py-1 text-center text-[12px] font-semibold text-slate-900">
+                    {formatRounded(item.roundedScore)}
+                  </td>
+                  <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
+                    {item.competenceNote}
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+
+          {options?.showSummary && (
+            <>
+              {/* Baris Total & Rata-rata Nilai */}
+              <tr className="bg-slate-50 font-semibold">
+                <td className="border px-1.5 py-1 text-[12px] text-slate-700"></td>
+                <td className="border px-2 py-1 text-[12px] uppercase text-slate-800">
+                  Jumlah Nilai
+                </td>
+                {reportVariant === "SAS" ? (
+                  <>
+                    <td className="border px-1.5 py-1 text-center text-[12px] font-bold text-slate-900">
+                      {formatRounded(preview.summary.totalScore)}
+                    </td>
+                    <td className="border px-2 py-1 text-[12px] text-slate-500 italic">
+                      Total capaian nilai dari {preview.summary.completedSubjects} dari{" "}
+                      {preview.summary.totalSubjects} mata pelajaran
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-center text-[12px] font-bold text-slate-900">
+                      {formatRounded(preview.summary.totalScore)}
+                    </td>
+                    <td className="border px-2 py-1 text-[12px] text-slate-500 italic">
+                      Total capaian nilai dari {preview.summary.completedSubjects} dari{" "}
+                      {preview.summary.totalSubjects} mata pelajaran
+                    </td>
+                  </>
+                )}
+              </tr>
+              <tr className="bg-slate-50 font-semibold">
+                <td className="border px-1.5 py-1 text-[12px] text-slate-700"></td>
+                <td className="border px-2 py-1 text-[12px] uppercase text-slate-800">
+                  Rata-rata Nilai
+                </td>
+                {reportVariant === "SAS" ? (
+                  <>
+                    <td className="border px-1.5 py-1 text-center text-[12px] font-bold text-slate-900">
+                      {preview.summary.averageScore === null
+                        ? "-"
+                        : preview.summary.averageScore.toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-[12px] text-slate-500"></td>
+                  </>
+                ) : (
+                  <>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-[12px]"></td>
+                    <td className="border px-1 py-1 text-center text-[12px] font-bold text-slate-900">
+                      {preview.summary.averageScore === null
+                        ? "-"
+                        : preview.summary.averageScore.toFixed(2)}
+                    </td>
+                    <td className="border px-2 py-1 text-[12px] text-slate-500"></td>
+                  </>
+                )}
+              </tr>
+            </>
+          )}
+        </tbody>
+      </table>
+    );
 
     return (
       <div
@@ -149,7 +323,7 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
         }`}
       >
         {/* =========================================================================
-            HALAMAN 1: KOP SEKOLAH, BIODATA SISWA, & KELOMPOK A (MAPEL UMUM)
+            HALAMAN 1: KOP SEKOLAH, BIODATA SISWA, KELOMPOK A & KELOMPOK B (BAGIAN 1)
         ========================================================================= */}
         <div
           className={`report-page report-page-1 bg-white ${
@@ -284,92 +458,76 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
                   {kelompokA.code}. {kelompokA.name}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-full border-collapse">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="w-8 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                          No
-                        </th>
-                        <th className="w-[28%] border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                          Mata Pelajaran
-                        </th>
-                        {reportVariant === "SAS" ? (
-                          <>
-                            <th className="w-16 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Nilai Akhir
-                            </th>
-                            <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                              {competenceLabel}
-                            </th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              AH
-                            </th>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Tugas
-                            </th>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              STS
-                            </th>
-                            <th className="w-14 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Nilai Akhir
-                            </th>
-                            <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                              {competenceLabel}
-                            </th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {kelompokA.items.map((item) => (
-                        <tr key={`${kelompokA.code}-${item.subjectName}`} className="align-top">
-                          <td className="border px-1.5 py-1 text-center text-[12px] text-slate-700">
-                            {item.no}
-                          </td>
-                          <td className="border px-2 py-1 text-[12px] font-medium text-slate-900">
-                            {item.subjectName}
-                          </td>
-                          {reportVariant === "SAS" ? (
-                            <>
-                              <td className="border px-1.5 py-1 text-center text-[12px] font-semibold text-slate-900">
-                                {formatRounded(item.roundedScore)}
-                              </td>
-                              <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
-                                {item.competenceNote}
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.uhAverage)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.tugasAverage)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.stsScore)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] font-semibold text-slate-900">
-                                {formatRounded(item.roundedScore)}
-                              </td>
-                              <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
-                                {item.competenceNote}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {renderSubjectTable(kelompokA.items)}
                 </div>
               </div>
             )}
+
+            {/* Tabel Nilai: Kelompok B (Mata Pelajaran Kejuruan - Bagian 1 di Halaman 1) */}
+            {bPage1Items.length > 0 && kelompokBGroup ? (
+              <div
+                key={`${kelompokBGroup.code}-p1`}
+                className="report-group overflow-hidden rounded-xl border border-slate-300"
+              >
+                <div className="report-group-title bg-slate-200 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                  {kelompokBGroup.code}. {kelompokBGroup.name}
+                </div>
+                <div className="overflow-x-auto">
+                  {renderSubjectTable(bPage1Items)}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* =========================================================================
+            HALAMAN 2: KELOMPOK B (LANJUTAN), PENGEMBANGAN DIRI, ABSENSI & CATATAN, TTD
+        ========================================================================= */}
+        <div
+          className={`report-page report-page-2 bg-white ${
+            forPdfExport
+              ? "p-4 border-0 shadow-none rounded-none"
+              : "p-5 border border-gray-200 rounded-2xl shadow-sm"
+          }`}
+          style={{ pageBreakBefore: "always", breakBefore: "page" }}
+        >
+          {/* Tabel Nilai: Kelompok B (Mata Pelajaran Kejuruan - Lanjutan) */}
+          <div className="space-y-2">
+            {bPage2Items.length > 0 && kelompokBGroup ? (
+              <div
+                key={`${kelompokBGroup.code}-p2`}
+                className="report-group overflow-hidden rounded-xl border border-slate-300"
+              >
+                <div className="report-group-title bg-slate-200 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                  {kelompokBGroup.code}. {kelompokBGroup.name}
+                  {bPage1Items.length > 0 ? " (Lanjutan)" : ""}
+                </div>
+                <div className="overflow-x-auto">
+                  {renderSubjectTable(bPage2Items, {
+                    showSummary: otherBGroups.length === 0,
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {otherBGroups.map((group, groupIdx) => (
+              <div
+                key={group.code}
+                className="report-group overflow-hidden rounded-xl border border-slate-300"
+              >
+                <div className="report-group-title bg-slate-200 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
+                  {group.code}. {group.name}
+                </div>
+                <div className="overflow-x-auto">
+                  {renderSubjectTable(group.items, {
+                    showSummary: groupIdx === otherBGroups.length - 1,
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* Pengembangan Diri dan Kepribadian (Diletakkan di Halaman 1 agar seimbang) */}
+          {/* Pengembangan Diri dan Kepribadian (Kembali di Halaman 2 Tepat di Bawah Tabel Nilai) */}
           <div className="report-panel mt-2.5 overflow-hidden rounded-xl border border-slate-300">
             <div className="report-panel-header bg-slate-100 px-3 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
               Pengembangan Diri dan Kepribadian
@@ -414,174 +572,6 @@ export const PrintableReportSheet = forwardRef<HTMLDivElement, PrintableReportSh
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* =========================================================================
-            HALAMAN 2: KELOMPOK B (KEJURUAN), ABSENSI & CATATAN, KENAIKAN KELAS, TTD
-        ========================================================================= */}
-        <div
-          className={`report-page report-page-2 bg-white ${
-            forPdfExport
-              ? "p-4 border-0 shadow-none rounded-none"
-              : "p-5 border border-gray-200 rounded-2xl shadow-sm"
-          }`}
-          style={{ pageBreakBefore: "always", breakBefore: "page" }}
-        >
-          {/* Tabel Nilai: Kelompok B (Mata Pelajaran Kejuruan) */}
-          <div className="space-y-2">
-            {kelompokBList.map((group) => (
-              <div
-                key={group.code}
-                className="report-group overflow-hidden rounded-xl border border-slate-300"
-              >
-                <div className="report-group-title bg-slate-200 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide text-slate-800">
-                  {group.code}. {group.name}
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-full border-collapse">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="w-8 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                          No
-                        </th>
-                        <th className="w-[28%] border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                          Mata Pelajaran
-                        </th>
-                        {reportVariant === "SAS" ? (
-                          <>
-                            <th className="w-16 border px-1.5 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Nilai Akhir
-                            </th>
-                            <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                              {competenceLabel}
-                            </th>
-                          </>
-                        ) : (
-                          <>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              AH
-                            </th>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Tugas
-                            </th>
-                            <th className="w-11 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              STS
-                            </th>
-                            <th className="w-14 border px-1 py-1 text-center text-[12px] font-semibold uppercase text-slate-700">
-                              Nilai Akhir
-                            </th>
-                            <th className="border px-2 py-1 text-left text-[12px] font-semibold uppercase text-slate-700">
-                              {competenceLabel}
-                            </th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.items.map((item) => (
-                        <tr key={`${group.code}-${item.subjectName}`} className="align-top">
-                          <td className="border px-1.5 py-1 text-center text-[12px] text-slate-700">
-                            {item.no}
-                          </td>
-                          <td className="border px-2 py-1 text-[12px] font-medium text-slate-900">
-                            {item.subjectName}
-                          </td>
-                          {reportVariant === "SAS" ? (
-                            <>
-                              <td className="border px-1.5 py-1 text-center text-[12px] font-semibold text-slate-900">
-                                {formatRounded(item.roundedScore)}
-                              </td>
-                              <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
-                                {item.competenceNote}
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.uhAverage)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.tugasAverage)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] text-slate-700">
-                                {formatNumber(item.stsScore)}
-                              </td>
-                              <td className="border px-1 py-1 text-center text-[12px] font-semibold text-slate-900">
-                                {formatRounded(item.roundedScore)}
-                              </td>
-                              <td className="border px-2 py-1 text-[12px] leading-snug text-slate-700">
-                                {item.competenceNote}
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-
-                      {/* Baris Total & Rata-rata Nilai */}
-                      <tr className="bg-slate-50 font-semibold">
-                        <td className="border px-1.5 py-1 text-[12px] text-slate-700"></td>
-                        <td className="border px-2 py-1 text-[12px] uppercase text-slate-800">
-                          Jumlah Nilai
-                        </td>
-                        {reportVariant === "SAS" ? (
-                          <>
-                            <td className="border px-1.5 py-1 text-center text-[12px] font-bold text-slate-900">
-                              {formatRounded(preview.summary.totalScore)}
-                            </td>
-                            <td className="border px-2 py-1 text-[12px] text-slate-500 italic">
-                              Total capaian nilai dari {preview.summary.completedSubjects} dari{" "}
-                              {preview.summary.totalSubjects} mata pelajaran
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-center text-[12px] font-bold text-slate-900">
-                              {formatRounded(preview.summary.totalScore)}
-                            </td>
-                            <td className="border px-2 py-1 text-[12px] text-slate-500 italic">
-                              Total capaian nilai dari {preview.summary.completedSubjects} dari{" "}
-                              {preview.summary.totalSubjects} mata pelajaran
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                      <tr className="bg-slate-50 font-semibold">
-                        <td className="border px-1.5 py-1 text-[12px] text-slate-700"></td>
-                        <td className="border px-2 py-1 text-[12px] uppercase text-slate-800">
-                          Rata-rata Nilai
-                        </td>
-                        {reportVariant === "SAS" ? (
-                          <>
-                            <td className="border px-1.5 py-1 text-center text-[12px] font-bold text-slate-900">
-                              {preview.summary.averageScore === null
-                                ? "-"
-                                : preview.summary.averageScore.toFixed(2)}
-                            </td>
-                            <td className="border px-2 py-1 text-[12px] text-slate-500"></td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-[12px]"></td>
-                            <td className="border px-1 py-1 text-center text-[12px] font-bold text-slate-900">
-                              {preview.summary.averageScore === null
-                                ? "-"
-                                : preview.summary.averageScore.toFixed(2)}
-                            </td>
-                            <td className="border px-2 py-1 text-[12px] text-slate-500"></td>
-                          </>
-                        )}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
           </div>
 
           {/* Absensi, Kenaikan Kelas & Catatan Wali Kelas (Dua Kolom Hemat Ruang) */}
