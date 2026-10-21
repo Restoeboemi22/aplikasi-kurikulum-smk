@@ -382,6 +382,11 @@ model Grade {
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  @@unique([studentId, subject, semester, jenisPenilaian])
+  @@index([studentId, semester])
+  @@index([subject, classLevel, major, semester, jenisPenilaian])
+  @@index([teacherId, semester])
 }
 
 model CalendarEvent {

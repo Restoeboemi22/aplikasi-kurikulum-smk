@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
     if (classLevel) filters.classLevel = classLevel;
     if (major) filters.major = major;
     if (jenisPenilaian) filters.jenisPenilaian = jenisPenilaian;
-    if (teacherId) filters.teacherId = teacherId;
     if (subject) filters.subject = subject;
     if (semester) filters.semester = semester;
     if (className) {
@@ -33,7 +32,9 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    if (session.role === 'TEACHER') {
+    if (session.role === 'ADMIN') {
+      if (teacherId) filters.teacherId = teacherId;
+    } else if (session.role === 'TEACHER') {
       const teacher = await prisma.teacher.findFirst({
         where: {
           OR: [
@@ -83,7 +84,29 @@ export async function GET(request: NextRequest) {
           );
         }
       } else {
-        filters.teacherId = teacher.id;
+        if (subject) {
+          const hasAssignment = teacher.teachingAssignments.some((assignment) => {
+            if (assignment.subject !== subject) return false;
+            if (className) {
+              return assignment.className === className;
+            }
+            if (classLevel && major) {
+              return assignment.classLevel === classLevel && assignment.majorCode === major;
+            }
+            return true;
+          });
+
+          if (!hasAssignment) {
+            return NextResponse.json(
+              { error: 'Anda tidak memiliki penugasan mengajar untuk mata pelajaran dan kelas ini.' },
+              { status: 403 }
+            );
+          }
+          // Guru memiliki penugasan sah untuk mapel/kelas ini.
+          // Tampilkan semua nilai siswa untuk mapel & kelas tersebut tanpa terhalang filter teacherId
+        } else {
+          filters.teacherId = teacher.id;
+        }
       }
     }
 
@@ -257,19 +280,6 @@ export async function POST(request: NextRequest) {
         found.forEach((s) => studentsById.set(s.id, s));
       }
 
-      // Preload existing grades for these students
-      const existingGrades = await tx.grade.findMany({
-        where: {
-          studentId: { in: studentIds.length > 0 ? studentIds : undefined },
-          subject: commonSubject,
-          semester: commonSemester,
-          jenisPenilaian: commonJenisPenilaian,
-          classLevel: commonClassLevel,
-          major: commonMajor,
-        },
-      });
-
-      const gradeByStudentId = new Map(existingGrades.map((g) => [g.studentId, g]));
       const savedList = [];
 
       for (const item of items) {
@@ -304,54 +314,47 @@ export async function POST(request: NextRequest) {
 
         const realClassLevel = extractClassLevel(student.className) || commonClassLevel;
 
-        const existing = gradeByStudentId.get(student.id) || await tx.grade.findFirst({
-          where: {
-            studentId: student.id,
-            subject: commonSubject,
-            semester: commonSemester,
-            jenisPenilaian: commonJenisPenilaian,
-          },
-        });
-
         const n1 = item.nilai1 ? String(item.nilai1).trim() : null;
         const n2 = item.nilai2 ? String(item.nilai2).trim() : null;
         const n3 = item.nilai3 ? String(item.nilai3).trim() : null;
         const nAkhir = item.nilaiAkhir ? String(item.nilaiAkhir).trim() : null;
 
-        if (existing) {
-          const updated = await tx.grade.update({
-            where: { id: existing.id },
-            data: {
-              nilai1: n1 || null,
-              nilai2: n2 || null,
-              nilai3: n3 || null,
-              nilaiAkhir: nAkhir || null,
-              classLevel: realClassLevel,
-              major: commonMajor,
-              teacherId: teacher.id,
-              userId: teacher.userId,
-            },
-          });
-          savedList.push(updated);
-        } else {
-          const created = await tx.grade.create({
-            data: {
+        const saved = await tx.grade.upsert({
+          where: {
+            studentId_subject_semester_jenisPenilaian: {
               studentId: student.id,
               subject: commonSubject,
-              classLevel: realClassLevel,
-              major: commonMajor,
-              jenisPenilaian: commonJenisPenilaian,
               semester: commonSemester,
-              nilai1: n1 || null,
-              nilai2: n2 || null,
-              nilai3: n3 || null,
-              nilaiAkhir: nAkhir || null,
-              teacherId: teacher.id,
-              userId: teacher.userId,
+              jenisPenilaian: commonJenisPenilaian,
             },
-          });
-          savedList.push(created);
-        }
+          },
+          update: {
+            nilai1: n1 || null,
+            nilai2: n2 || null,
+            nilai3: n3 || null,
+            nilaiAkhir: nAkhir || null,
+            classLevel: realClassLevel,
+            major: commonMajor,
+            teacherId: teacher.id,
+            userId: teacher.userId,
+          },
+          create: {
+            studentId: student.id,
+            subject: commonSubject,
+            classLevel: realClassLevel,
+            major: commonMajor,
+            jenisPenilaian: commonJenisPenilaian,
+            semester: commonSemester,
+            nilai1: n1 || null,
+            nilai2: n2 || null,
+            nilai3: n3 || null,
+            nilaiAkhir: nAkhir || null,
+            teacherId: teacher.id,
+            userId: teacher.userId,
+          },
+        });
+
+        savedList.push(saved);
       }
 
       return savedList;

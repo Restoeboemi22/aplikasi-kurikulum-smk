@@ -195,9 +195,6 @@ export default function PenilaianTugasPage() {
         subject: selectedSubject,
         semester: buildSemesterLabel(selectedSemester, selectedAcademicYear),
       });
-      if (currentTeacher?.id) {
-        gradeParams.set("teacherId", currentTeacher.id);
-      }
 
       const [studentRes, gradeRes] = await Promise.all([
         fetch(
@@ -213,7 +210,21 @@ export default function PenilaianTugasPage() {
       if (studentRes.ok && gradeRes.ok) {
         const studentData = await studentRes.json();
         const gradeData: GradeRecord[] = await gradeRes.json();
-        const gradeMap = new Map(gradeData.map((grade) => [grade.studentId, grade]));
+        const gradeMap = new Map<string, GradeRecord>();
+        for (const grade of gradeData) {
+          const existing = gradeMap.get(grade.studentId);
+          if (!existing) {
+            gradeMap.set(grade.studentId, grade);
+          } else {
+            gradeMap.set(grade.studentId, {
+              ...existing,
+              ...grade,
+              nilai1: grade.nilai1 || existing.nilai1,
+              nilai2: grade.nilai2 || existing.nilai2,
+              nilai3: grade.nilai3 || existing.nilai3,
+            });
+          }
+        }
         let filteredStudents = studentData.filter((s: Student) => {
           const className = s.className || "";
           return className === selectedClass.className;
