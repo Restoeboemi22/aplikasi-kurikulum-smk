@@ -86,12 +86,13 @@ export async function GET(request: NextRequest) {
       } else {
         if (subject) {
           const hasAssignment = teacher.teachingAssignments.some((assignment) => {
-            if (assignment.subject !== subject) return false;
+            if (assignment.subject.trim().toUpperCase() !== subject.trim().toUpperCase()) return false;
             if (className) {
-              return assignment.className === className;
+              return assignment.className.trim().toUpperCase() === className.trim().toUpperCase();
             }
             if (classLevel && major) {
-              return assignment.classLevel === classLevel && assignment.majorCode === major;
+              return assignment.classLevel.trim().toUpperCase() === classLevel.trim().toUpperCase() &&
+                     assignment.majorCode.trim().toUpperCase() === major.trim().toUpperCase();
             }
             return true;
           });
@@ -185,8 +186,8 @@ export async function POST(request: NextRequest) {
     const dbSubject = await prisma.subject.findFirst({
       where: {
         OR: [
-          { name: commonSubject },
-          { code: commonSubject },
+          { name: { equals: commonSubject, mode: 'insensitive' } },
+          { code: { equals: commonSubject, mode: 'insensitive' } },
         ],
       },
     });
@@ -213,8 +214,8 @@ export async function POST(request: NextRequest) {
         // Find teacher assigned to this subject and class
         const assignment = await prisma.teachingAssignment.findFirst({
           where: {
-            subject: commonSubject,
-            ...(commonClassName ? { className: commonClassName } : {}),
+            subject: { equals: commonSubject, mode: 'insensitive' },
+            ...(commonClassName ? { className: { equals: commonClassName, mode: 'insensitive' } } : {}),
           },
           include: { teacher: { include: { user: true, teachingAssignments: true } } },
         });
@@ -253,11 +254,12 @@ export async function POST(request: NextRequest) {
       }
 
       const matchedAssignment = teacher.teachingAssignments.find((assignment) => {
-        if (assignment.subject !== commonSubject) return false;
+        if (assignment.subject.trim().toUpperCase() !== commonSubject.trim().toUpperCase()) return false;
         if (commonClassName) {
-          return assignment.className === commonClassName;
+          return assignment.className.trim().toUpperCase() === commonClassName.trim().toUpperCase();
         }
-        return assignment.classLevel === commonClassLevel && assignment.majorCode === commonMajor;
+        return assignment.classLevel.trim().toUpperCase() === commonClassLevel.trim().toUpperCase() &&
+               assignment.majorCode.trim().toUpperCase() === commonMajor.trim().toUpperCase();
       });
 
       if (!matchedAssignment) {
@@ -268,106 +270,129 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Process saving in a single atomic transaction
-    const results = await prisma.$transaction(async (tx) => {
-      // Preload student IDs
-      const studentIds = items.map((it) => it.studentId).filter(Boolean) as string[];
-      const studentsById = new Map();
-      if (studentIds.length > 0) {
-        const found = await tx.student.findMany({
-          where: { id: { in: studentIds } },
-        });
-        found.forEach((s) => studentsById.set(s.id, s));
+    // 1. Preload student data in memory for fast O(1) resolution without N+1 queries
+    const studentIds = items.map((it) => it.studentId).filter(Boolean) as string[];
+    const studentsById = new Map();
+    if (studentIds.length > 0) {
+      const found = await prisma.student.findMany({
+        where: { id: { in: studentIds } },
+      });
+      found.forEach((s) => studentsById.set(s.id, s));
+    }
+
+    const classStudentsByName = new Map();
+    if (commonClassName) {
+      const classStudents = await prisma.student.findMany({
+        where: { className: commonClassName },
+      });
+      classStudents.forEach((s) => classStudentsByName.set(s.name.trim().toUpperCase(), s));
+    }
+
+    // 2. Validate and prepare items
+    const validItems: Array<{
+      studentId: string;
+      realClassLevel: string;
+      n1: string | null;
+      n2: string | null;
+      n3: string | null;
+      nAkhir: string | null;
+    }> = [];
+
+    for (const item of items) {
+      const sName = item.studentName?.trim();
+      if (!sName && !item.studentId) continue;
+
+      let student = item.studentId ? studentsById.get(item.studentId) : null;
+      if (!student && sName) {
+        student = classStudentsByName.get(sName.toUpperCase());
       }
 
-      const savedList = [];
+      if (!student) continue;
 
-      for (const item of items) {
-        const sName = item.studentName?.trim();
-        if (!sName && !item.studentId) continue;
+      // Anti cross-class validation: ensure student actually belongs to the target class
+      if (commonClassName && student.className && student.className.trim().toUpperCase() !== commonClassName.trim().toUpperCase()) {
+        console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target class is ${commonClassName}`);
+        continue;
+      }
 
-        let student = item.studentId ? studentsById.get(item.studentId) : null;
-        if (!student && sName) {
-          student = await tx.student.findFirst({
+      // Anti cross-level validation: ensure student's class matches target level
+      if (commonClassLevel && student.className && !student.className.trim().toUpperCase().startsWith(commonClassLevel.toUpperCase() + ' ')) {
+        console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target level is ${commonClassLevel}`);
+        continue;
+      }
+
+      const realClassLevel = extractClassLevel(student.className) || commonClassLevel;
+      const n1 = item.nilai1 ? String(item.nilai1).trim() : null;
+      const n2 = item.nilai2 ? String(item.nilai2).trim() : null;
+      const n3 = item.nilai3 ? String(item.nilai3).trim() : null;
+      const nAkhir = item.nilaiAkhir ? String(item.nilaiAkhir).trim() : null;
+
+      validItems.push({
+        studentId: student.id,
+        realClassLevel,
+        n1,
+        n2,
+        n3,
+        nAkhir,
+      });
+    }
+
+    // 3. Execute atomic upserts in concurrent batches (chunkSize 10)
+    // This avoids transaction timeout (P2028) on large classes while protecting DB connection pool
+    const chunkSize = 10;
+    const savedList = [];
+
+    for (let i = 0; i < validItems.length; i += chunkSize) {
+      const chunk = validItems.slice(i, i + chunkSize);
+      const chunkResults = await Promise.all(
+        chunk.map((item) =>
+          prisma.grade.upsert({
             where: {
-              name: sName,
-              ...(commonClassName
-                ? { className: commonClassName }
-                : { className: { startsWith: `${commonClassLevel} ` } }),
+              studentId_subject_semester_jenisPenilaian: {
+                studentId: item.studentId,
+                subject: commonSubject,
+                semester: commonSemester,
+                jenisPenilaian: commonJenisPenilaian,
+              },
             },
-          });
-        }
-
-        if (!student) continue;
-
-        // Anti cross-class validation: ensure student actually belongs to the target class
-        if (commonClassName && student.className && student.className.trim() !== commonClassName.trim()) {
-          console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target class is ${commonClassName}`);
-          continue;
-        }
-
-        // Anti cross-level validation: ensure student's class matches target level
-        if (commonClassLevel && student.className && !student.className.trim().startsWith(commonClassLevel + ' ')) {
-          console.warn(`[Anti-Leak] Skipping student ${student.name} (${student.className}) because target level is ${commonClassLevel}`);
-          continue;
-        }
-
-        const realClassLevel = extractClassLevel(student.className) || commonClassLevel;
-
-        const n1 = item.nilai1 ? String(item.nilai1).trim() : null;
-        const n2 = item.nilai2 ? String(item.nilai2).trim() : null;
-        const n3 = item.nilai3 ? String(item.nilai3).trim() : null;
-        const nAkhir = item.nilaiAkhir ? String(item.nilaiAkhir).trim() : null;
-
-        const saved = await tx.grade.upsert({
-          where: {
-            studentId_subject_semester_jenisPenilaian: {
-              studentId: student.id,
+            update: {
+              nilai1: item.n1,
+              nilai2: item.n2,
+              nilai3: item.n3,
+              nilaiAkhir: item.nAkhir,
+              classLevel: item.realClassLevel,
+              major: commonMajor,
+              teacherId: teacher.id,
+              userId: teacher.userId,
+            },
+            create: {
+              studentId: item.studentId,
               subject: commonSubject,
-              semester: commonSemester,
+              classLevel: item.realClassLevel,
+              major: commonMajor,
               jenisPenilaian: commonJenisPenilaian,
+              semester: commonSemester,
+              nilai1: item.n1,
+              nilai2: item.n2,
+              nilai3: item.n3,
+              nilaiAkhir: item.nAkhir,
+              teacherId: teacher.id,
+              userId: teacher.userId,
             },
-          },
-          update: {
-            nilai1: n1 || null,
-            nilai2: n2 || null,
-            nilai3: n3 || null,
-            nilaiAkhir: nAkhir || null,
-            classLevel: realClassLevel,
-            major: commonMajor,
-            teacherId: teacher.id,
-            userId: teacher.userId,
-          },
-          create: {
-            studentId: student.id,
-            subject: commonSubject,
-            classLevel: realClassLevel,
-            major: commonMajor,
-            jenisPenilaian: commonJenisPenilaian,
-            semester: commonSemester,
-            nilai1: n1 || null,
-            nilai2: n2 || null,
-            nilai3: n3 || null,
-            nilaiAkhir: nAkhir || null,
-            teacherId: teacher.id,
-            userId: teacher.userId,
-          },
-        });
-
-        savedList.push(saved);
-      }
-
-      return savedList;
-    });
+          })
+        )
+      );
+      savedList.push(...chunkResults);
+    }
 
     if (isBatch) {
       return NextResponse.json({
-        message: `Berhasil menyimpan nilai untuk ${results.length} siswa.`,
-        savedCount: results.length,
+        message: `Berhasil menyimpan nilai untuk ${savedList.length} siswa.`,
+        savedCount: savedList.length,
       }, { status: 200 });
     }
 
-    return NextResponse.json(results[0] || null, { status: 201 });
+    return NextResponse.json(savedList[0] || null, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Session login tidak valid.' }, { status: 401 });
