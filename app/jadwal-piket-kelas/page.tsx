@@ -99,8 +99,8 @@ function StatusToggleCell({
   readOnly?: boolean;
 }) {
   const baseClass =
-    "mx-auto flex h-9 w-9 items-center justify-center rounded-md border-2 transition";
-  const interactiveClass = readOnly ? "cursor-default" : "hover:scale-[1.04]";
+    "mx-auto flex h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 items-center justify-center rounded-md border-2 transition";
+  const interactiveClass = readOnly ? "cursor-default" : "hover:scale-[1.04] active:scale-95";
 
   if (status === "done") {
     return (
@@ -111,7 +111,7 @@ function StatusToggleCell({
         className={`${baseClass} ${interactiveClass} border-slate-900 bg-white text-slate-900`}
         title="Sudah dipantau"
       >
-        <Check size={24} strokeWidth={3} />
+        <Check className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" strokeWidth={3} />
       </button>
     );
   }
@@ -125,7 +125,7 @@ function StatusToggleCell({
         className={`${baseClass} ${interactiveClass} border-slate-900 bg-[repeating-linear-gradient(45deg,#111827,#111827_2px,#f8fafc_2px,#f8fafc_4px)] text-transparent`}
         title="Ada catatan/masalah"
       >
-        <Minus size={18} />
+        <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
       </button>
     );
   }
@@ -138,7 +138,7 @@ function StatusToggleCell({
       className={`${baseClass} ${interactiveClass} border-slate-400 bg-white text-slate-300`}
       title="Belum ditandai"
     >
-      <Minus size={18} />
+      <Minus className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
     </button>
   );
 }
@@ -156,71 +156,146 @@ function PicketReportSheet({
   onToggle?: (className: string, period: ClassPicketPeriod) => void;
   readOnly?: boolean;
 }) {
+  const [zoom, setZoom] = useState<number>(100);
+
+  const handleZoom = (val: number) => {
+    setZoom(val);
+  };
+
   return (
     <div className="overflow-hidden rounded-2xl border border-[#7f71b8] bg-white shadow-sm">
-      <div className="border-b border-[#7f71b8] bg-[#f3efff] px-6 py-5 text-center">
-        <p className="text-2xl font-black uppercase tracking-wide text-gray-900">Laporan Piket</p>
-        <p className="mt-1 text-3xl font-black uppercase text-gray-900">{formatPicketReportDate(reportDate)}</p>
+      <div className="border-b border-[#7f71b8] bg-[#f3efff] px-3 sm:px-6 py-3 sm:py-5 text-center">
+        <p className="text-base sm:text-xl md:text-2xl font-black uppercase tracking-wide text-gray-900">
+          Laporan Piket
+        </p>
+        <p className="mt-0.5 sm:mt-1 text-lg sm:text-2xl md:text-3xl font-black uppercase text-gray-900">
+          {formatPicketReportDate(reportDate)}
+        </p>
+
+        {/* Toolbar Zoom / Skala Tampilan Khusus Mobile & Desktop */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+          <span className="text-gray-600 font-medium mr-1">Skala Tampilan:</span>
+          <button
+            type="button"
+            onClick={() => handleZoom(Math.max(50, zoom - 15))}
+            className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 font-semibold text-purple-700 hover:bg-purple-50 active:scale-95 transition"
+            title="Kecilkan Tampilan"
+          >
+            - Kecilkan
+          </button>
+          <span className="min-w-[44px] text-center font-bold text-purple-900">{zoom}%</span>
+          <button
+            type="button"
+            onClick={() => handleZoom(Math.min(130, zoom + 15))}
+            className="rounded-lg border border-purple-300 bg-white px-2.5 py-1 font-semibold text-purple-700 hover:bg-purple-50 active:scale-95 transition"
+            title="Besarkan Tampilan"
+          >
+            + Besarkan
+          </button>
+          <div className="hidden xs:flex items-center gap-1 ml-1 sm:ml-2">
+            {[65, 80, 100].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => handleZoom(preset)}
+                className={`rounded-md px-2 py-0.5 font-medium transition ${
+                  zoom === preset
+                    ? "bg-purple-700 text-white"
+                    : "bg-purple-100 text-purple-800 hover:bg-purple-200"
+                }`}
+              >
+                {preset}%
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => handleZoom(zoom === 65 ? 100 : 65)}
+            className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white px-2.5 py-1 font-semibold shadow-sm transition active:scale-95 ml-1"
+          >
+            {zoom === 65 ? "🔍 Ukuran Normal" : "📱 Pas di Layar HP"}
+          </button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse">
-          <thead>
-            <tr className="bg-[#b8aadf] text-gray-900">
-              <th rowSpan={2} className="border border-[#5d5387] px-4 py-3 text-center text-2xl font-bold">
-                NO
-              </th>
-              <th rowSpan={2} className="border border-[#5d5387] px-6 py-3 text-center text-2xl font-bold">
-                KELAS
-              </th>
-              <th
-                colSpan={CLASS_PICKET_PERIODS.length}
-                className="border border-[#5d5387] px-6 py-3 text-center text-2xl font-bold"
-              >
-                JAM KE-
-              </th>
-            </tr>
-            <tr className="bg-[#d8d0f0] text-gray-900">
-              {CLASS_PICKET_PERIODS.map((period) => (
-                <th key={period} className="border border-[#5d5387] px-5 py-3 text-center text-2xl font-bold">
-                  {period}
+      <div className="overflow-x-auto w-full">
+        <div
+          style={{
+            zoom: `${zoom}%`,
+          }}
+          className="transition-all origin-top-left"
+        >
+          <table className="min-w-full border-collapse">
+            <thead>
+              <tr className="bg-[#b8aadf] text-gray-900">
+                <th
+                  rowSpan={2}
+                  className="border border-[#5d5387] px-2 py-1.5 sm:px-4 sm:py-3 text-center text-xs sm:text-base md:text-xl font-bold whitespace-nowrap"
+                >
+                  NO
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {classRows.map((className, index) => (
-              <tr key={className}>
-                <td className="border border-gray-700 px-4 py-3 text-center text-2xl font-bold">{index + 1}</td>
-                <td className="border border-gray-700 px-4 py-3 text-center text-2xl font-bold">{className}</td>
+                <th
+                  rowSpan={2}
+                  className="border border-[#5d5387] px-2 py-1.5 sm:px-6 sm:py-3 text-center text-xs sm:text-base md:text-xl font-bold whitespace-nowrap"
+                >
+                  KELAS
+                </th>
+                <th
+                  colSpan={CLASS_PICKET_PERIODS.length}
+                  className="border border-[#5d5387] px-2 py-1.5 sm:px-6 sm:py-3 text-center text-xs sm:text-base md:text-xl font-bold"
+                >
+                  JAM KE-
+                </th>
+              </tr>
+              <tr className="bg-[#d8d0f0] text-gray-900">
                 {CLASS_PICKET_PERIODS.map((period) => (
-                  <td key={period} className="border border-gray-700 px-3 py-3 text-center">
-                    <StatusToggleCell
-                      status={reportState[className]?.[period] || "empty"}
-                      onClick={onToggle ? () => onToggle(className, period) : undefined}
-                      readOnly={readOnly}
-                    />
-                  </td>
+                  <th
+                    key={period}
+                    className="border border-[#5d5387] px-1.5 py-1.5 sm:px-4 sm:py-3 text-center text-xs sm:text-sm md:text-lg font-bold whitespace-nowrap"
+                  >
+                    {period}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {classRows.map((className, index) => (
+                <tr key={className}>
+                  <td className="border border-gray-700 px-2 py-1.5 sm:px-4 sm:py-3 text-center text-xs sm:text-base md:text-xl font-bold">
+                    {index + 1}
+                  </td>
+                  <td className="border border-gray-700 px-2 py-1.5 sm:px-4 sm:py-3 text-center text-xs sm:text-base md:text-xl font-bold whitespace-nowrap">
+                    {className}
+                  </td>
+                  {CLASS_PICKET_PERIODS.map((period) => (
+                    <td key={period} className="border border-gray-700 px-1.5 py-1.5 sm:px-3 sm:py-3 text-center">
+                      <StatusToggleCell
+                        status={reportState[className]?.[period] || "empty"}
+                        onClick={onToggle ? () => onToggle(className, period) : undefined}
+                        readOnly={readOnly}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="grid gap-3 border-t border-[#7f71b8] bg-[#faf8ff] px-6 py-4 text-sm text-gray-600 md:grid-cols-3">
+      <div className="grid gap-2 sm:gap-3 border-t border-[#7f71b8] bg-[#faf8ff] px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 sm:grid-cols-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded border-2 border-slate-900">
-            <Check size={16} strokeWidth={3} />
+          <div className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded border-2 border-slate-900 shrink-0">
+            <Check size={14} className="sm:w-4 sm:h-4" strokeWidth={3} />
           </div>
           <span>Sudah dipantau</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded border-2 border-slate-900 bg-[repeating-linear-gradient(45deg,#111827,#111827_2px,#f8fafc_2px,#f8fafc_4px)]" />
+          <div className="h-5 w-5 sm:h-6 sm:w-6 rounded border-2 border-slate-900 bg-[repeating-linear-gradient(45deg,#111827,#111827_2px,#f8fafc_2px,#f8fafc_4px)] shrink-0" />
           <span>Ada catatan/masalah</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded border-2 border-slate-400 bg-white" />
+          <div className="h-5 w-5 sm:h-6 sm:w-6 rounded border-2 border-slate-400 bg-white shrink-0" />
           <span>Belum ditandai</span>
         </div>
       </div>
@@ -425,14 +500,14 @@ function TeacherPicketClassPage({
             Lembar laporan piket kelas untuk guru piket sesuai jadwal dari admin.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="rounded-lg border border-gray-300 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
-          <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-emerald-50 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-emerald-700">
             <Save size={16} />
             {isSaving ? "Menyimpan..." : savedAt ? `Tersimpan otomatis ${savedAt}` : "Simpan otomatis aktif"}
           </div>

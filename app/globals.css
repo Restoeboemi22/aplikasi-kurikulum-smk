@@ -4,6 +4,15 @@
 
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Dukungan responsive scrolling & pinch-zoom untuk iOS Safari / iPhone */
+.overflow-x-auto,
+.overflow-auto,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 /* ===== Tema "Kitty" pink (buatan sendiri, tanpa aset berlisensi) ===== */

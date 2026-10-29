@@ -553,45 +553,46 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-gradient-to-r from-pink-100 via-rose-100 to-fuchsia-100 border-b border-pink-200 px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <header className="bg-gradient-to-r from-pink-100 via-rose-100 to-fuchsia-100 border-b border-pink-200 px-3 sm:px-6 py-2.5 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg hover:bg-pink-200/60 text-pink-600 sm:hidden"
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-pink-200/60 text-pink-600 sm:hidden shrink-0"
+              aria-label="Buka Menu"
             >
-              <Menu size={24} />
+              <Menu size={22} />
             </button>
-            <h2 className="text-2xl font-bold text-pink-700">
+            <h2 className="text-base sm:text-xl md:text-2xl font-bold text-pink-700 truncate leading-tight">
               {activeLabel}
             </h2>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400" size={18} />
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-pink-400" size={16} />
               <input
                 type="text"
                 placeholder="Cari..."
-                className="pl-10 pr-4 py-2 rounded-full border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400"
+                className="w-24 xs:w-32 sm:w-44 md:w-60 pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm rounded-full border border-pink-200 bg-white/80 focus:outline-none focus:ring-2 focus:ring-pink-400 transition-all focus:w-36 sm:focus:w-56"
               />
             </div>
-            <button className="p-2 rounded-full hover:bg-pink-200/60 text-pink-500">
-              <Bell size={20} />
+            <button className="p-1.5 sm:p-2 rounded-full hover:bg-pink-200/60 text-pink-500" aria-label="Notifikasi">
+              <Bell size={18} />
             </button>
             <button
               type="button"
               onClick={logout}
               title="Logout"
               aria-label="Logout"
-              className="flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-100 transition-colors"
+              className="flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-rose-600 hover:bg-rose-100 transition-colors"
             >
-              <LogOut size={18} />
-              <span className="hidden sm:inline">Logout</span>
+              <LogOut size={16} />
+              <span className="hidden md:inline">Logout</span>
             </button>
           </div>
         </header>
 
         {/* Content */}
-        <div className="kitty-bg flex-1 overflow-auto p-6">{renderGuardedContent()}</div>
+        <div className="kitty-bg flex-1 overflow-auto p-2 sm:p-4 md:p-6">{renderGuardedContent()}</div>
       </main>
     </div>
   );

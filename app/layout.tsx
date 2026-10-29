@@ -6,8 +6,10 @@ import ServiceWorkerCleanup from "./sw-cleanup";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  minimumScale: 0.25,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {
